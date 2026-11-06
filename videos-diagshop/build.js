@@ -114,21 +114,33 @@ const sc = (s, e, html, extra = '') => `<section class="scene" style="--s:${s}s;
 
 const laptop = (d, codes) => `
 <div class="laptop up" style="--d:${d}s"><div class="screen"><div class="scanline"></div>
- <div class="sh"><span>AUTOCOM · DELPHI DS150E</span><span>● CONNECTÉ OBD</span></div>
+ <div class="sh"><span>DIAGSHOP · MULTIMARQUE</span><span>● CONNECTÉ OBD</span></div>
  <div class="veh">Volkswagen Golf 7 · 1.6 TDI · 2017</div>
  <div class="bar"><i style="--d:${d + .4}s;--t:2.6s"></i></div>
  ${['Moteur (ECU)', 'Boîte de vitesses', 'ABS / ESP', 'Airbag', 'Tableau de bord'].map((n, i) =>
   `<div class="ecu left" style="--d:${(d + .7 + i * .45).toFixed(2)}s"><span>${n}</span>${codes.includes(i) ? '<span class="ko">● DÉFAUT</span>' : '<span class="ok">● OK</span>'}</div>`).join('')}
 </div><div class="base"></div></div>`;
 
-const cta = (s, title) => sc(s, 99, `
+const KITS = [['Entrée de gamme', 'PC Delphi / Autocom', '150 €'], ['Pack complet', 'Auto & Poids-Lourds', '399 €'], ['Premium', 'Pack DiagZone', '580 €'], ['Haut de gamme', 'LAUNCH SmartLink', '1 050 €']];
+const CHIPS = ['Logiciel installé', 'Testé sur véhicule', 'FR · NL · EN', 'Essai à Bruxelles'];
+const ctaFoot = (s) => `
+<div class="pop" style="--d:${s}s"><div class="wa">${WA}0485 38 25 36</div></div>
+<div class="up mut" style="--d:${s + .3}s;font-size:30px;margin-top:30px;font-weight:600">diagshop.vercel.app · Envoi Europe</div>`;
+// mode 'kits' : les 4 kits avec leurs prix ; mode 'range' : « à partir de 150 € » (quand les kits viennent d'être montrés)
+const cta = (s, title, mode = 'kits') => sc(s, 99, mode === 'kits' ? `
+<div class="up h" style="--d:${s + .1}s;font-size:68px;margin-bottom:44px">${title}</div>
+<div class="packs" style="gap:16px;margin-bottom:50px">${KITS.map((p, i) =>
+  `<div class="card pack left" style="--d:${(s + .3 + i * .2).toFixed(2)}s;padding:24px 36px"><div><span>${p[0]}</span>${p[1]}</div><b>${p[2]}</b></div>`).join('')}</div>
+<div class="chips" style="margin-bottom:50px">${CHIPS.map((c, i) =>
+  `<div class="chip pop" style="--d:${(s + 1.1 + i * .1).toFixed(2)}s;font-size:24px;padding:12px 22px">${c}</div>`).join('')}</div>
+${ctaFoot(s + 1.6)}` : `
 <div class="up h" style="--d:${s + .1}s;font-size:64px;margin-bottom:10px">${title}</div>
-<div class="pop h price" style="--d:${s + .35}s"><span class="grad">150</span><sup class="grad">€</sup></div>
-<div class="up mut" style="--d:${s + .6}s;font-size:34px;font-weight:600;margin:-10px 0 44px">PC Diagnostic Delphi / Autocom</div>
-<div class="chips" style="margin-bottom:60px">${['Logiciel installé', 'Testé sur véhicule', 'FR · NL · EN', 'Essai à Bruxelles'].map((c, i) =>
-  `<div class="chip pop" style="--d:${(s + .8 + i * .15).toFixed(2)}s">${c}</div>`).join('')}</div>
-<div class="pop" style="--d:${s + 1.5}s"><div class="wa">${WA}0485 38 25 36</div></div>
-<div class="up mut" style="--d:${s + 1.8}s;font-size:30px;margin-top:30px;font-weight:600">diagshop.vercel.app · Envoi Europe</div>`);
+<div class="up mut" style="--d:${s + .3}s;font-size:44px;font-weight:700">4 kits · à partir de</div>
+<div class="pop h price" style="--d:${s + .45}s"><span class="grad">150</span><sup class="grad">€</sup></div>
+<div class="up mut" style="--d:${s + .7}s;font-size:34px;font-weight:600;margin:-10px 0 44px">jusqu'au kit LAUNCH à 1 050 €</div>
+<div class="chips" style="margin-bottom:60px">${CHIPS.map((c, i) =>
+  `<div class="chip pop" style="--d:${(s + .9 + i * .15).toFixed(2)}s">${c}</div>`).join('')}</div>
+${ctaFoot(s + 1.6)}`);
 
 const codesCard = (d, after) => `
 <div class="card">
@@ -164,7 +176,7 @@ ${ENGINE.replace('<svg', '<svg class="cel"')}<div class="gauge">0<small>km/h</sm
 <div class="steps">${[['Branche', 'Prise OBD, sous le volant'], ['Lis', 'Tous les calculateurs, codes expliqués'], ['Efface', 'Après réparation. Voyant éteint.']].map((s, i) =>
         `<div class="step left" style="--d:${(3.9 + i * 1.1).toFixed(2)}s"><div class="num">${i + 1}</div><div><h3>${s[0]}.</h3><p>${s[1]}</p></div></div>`).join('')}</div>`),
       sc(8, 11.2, `<div class="up h" style="--d:8.1s;font-size:76px;margin-bottom:60px">Le vrai défaut,<br><span class="grad">pas une supposition.</span></div>${laptop(8.3, [0, 2])}`),
-      cta(11.2, 'Ton outil de diag, chez toi.')
+      cta(11.2, 'Choisis ton kit.')
     ]
   },
   3: {
@@ -180,7 +192,7 @@ ${ENGINE.replace('<svg', '<svg class="cel"')}<div class="gauge">0<small>km/h</sm
       sc(7.4, 11.2, `<div class="up h" style="--d:7.5s;font-size:80px;margin-bottom:56px">Un kit pour<br><span class="grad">chaque atelier.</span></div>
 <div class="packs">${[['Entrée de gamme', 'PC Delphi / Autocom', '150 €'], ['Pack complet', 'Auto & Poids-Lourds', '399 €'], ['Premium', 'Pack DiagZone', '580 €'], ['Haut de gamme', 'LAUNCH SmartLink', '1 050 €']].map((p, i) =>
         `<div class="card pack left" style="--d:${(7.8 + i * .35).toFixed(2)}s"><div><span>${p[0]}</span>${p[1]}</div><b>${p[2]}</b></div>`).join('')}</div>`),
-      cta(11.2, 'Livré prêt à brancher.')
+      cta(11.2, 'Livré prêt à brancher.', 'range')
     ]
   }
 };
