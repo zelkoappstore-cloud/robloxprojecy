@@ -50,7 +50,7 @@ function next(R, a, b, len) {
 }
 const fmt = toks => {
   let s = toks[0] || '';
-  for (const w of toks.slice(1)) s += w === ',' || w === '.' ? w : /^[;:!?]$/.test(w) ? '\u202f' + w : s.endsWith(APOS) ? w : ' ' + w;
+  for (const w of toks.slice(1)) s += w === ',' || w === '.' ? w : /^[;:!?]$/.test(w) ? ' ' + w : s.endsWith(APOS) ? w : ' ' + w;
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 

@@ -161,7 +161,7 @@ function drawBoard() {
     if (!r.exact) { bctx.fillStyle = '#ffffff'; bctx.font = '19px Georgia'; wrap(bctx, 'v ' + r.ref, 20, y0 + 58, W - 40, 22, 1); }
   });
   const b = last.livre; bctx.fillStyle = '#f2d36b'; bctx.font = 'bold 17px system-ui';
-  bctx.fillText(`Lecture libre - ${acceptRate(st.lecture)} % accept\u00e9es`, 20, 270);
+  bctx.fillText(`Lecture libre - ${acceptRate(st.lecture)} % acceptées`, 20, 270);
   if (b) { bctx.font = '20px Georgia'; bctx.fillStyle = b.score === 100 ? '#bff0c9' : '#ffb4a8'; wrap(bctx, (b.score === 100 ? '' : 'x ') + b.out, 20, 300, W - 40, 24, 2); }
   btex.needsUpdate = true;
 }
