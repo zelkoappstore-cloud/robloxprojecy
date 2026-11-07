@@ -193,13 +193,58 @@ function langUI() {
       ${ok ? '' : `<div class="ref">${esc(r.ref)}</div><ul>${r.errs.slice(0, 2).map(e => `<li>${esc(e)}</li>`).join('')}</ul>`}${meter}</div>`;
   };
   const b = last.livre || st.lecture.phrases[0];
-  const livre = `<div class="lc wide"><h5><span>Lecture libre &middot; ${BOOKS.books} livres lus (${BOOKS.words.toLocaleString('fr-BE')} mots, ${BOOKS.vocab.toLocaleString('fr-BE')} mots diff&eacute;rents)</span><span>${b ? b.score + '/100' : ''}</span></h5>
+  const C = ensureCerveau(st), cb = C.phrases[0], info = brainInfo(), rate = C.ok.length ? Math.round(C.ok.reduce((a, b) => a + b, 0) / C.ok.length * 100) : 0;
+  const cerveau = `<div class="lc"><h5><span>Cerveau neuronal${info ? ` &middot; ${(info.params / 1e6).toFixed(1)} M neurones` : ''}</span><span>${cb ? cb.score + '/100' : ''}</span></h5>
+    <div class="sens">Juge LanguageTool &middot; parfaites : ${rate} %${info?.stats?.tours?.length ? ` &middot; entra&icirc;nement : ${info.stats.tours.join(' &rarr; ')} %` : ''}${brainState ? ' &middot; ' + esc(brainState) : ''}</div>
+    ${cb ? `<div class="out ${cb.score === 100 ? 'ok' : 'ko'}">${esc(cb.out)}</div>${cb.errs.length ? `<ul>${cb.errs.slice(0, 2).map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}` : ''}</div>`;
+  const livre = `<div class="lc"><h5><span>Lecture libre &middot; ${BOOKS.books} livres lus (${BOOKS.words.toLocaleString('fr-BE')} mots, ${BOOKS.vocab.toLocaleString('fr-BE')} mots diff&eacute;rents)</span><span>${b ? b.score + '/100' : ''}</span></h5>
     <div class="sens">Il invente ses propres phrases d&rsquo;apr&egrave;s ses lectures &middot; accept&eacute;es par le juge : ${acceptRate(st.lecture)} %</div>
     ${b ? `<div class="out ${b.score === 100 ? 'ok' : 'ko'}">${esc(b.out)}</div>${b.errs.length ? `<ul>${b.errs.slice(0, 2).map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}` : '<div class="sens">Premi&egrave;re lecture...</div>'}</div>`;
   document.getElementById('lang').innerHTML = `<div class="top"><b>Cours de langues &middot; juge strict</b><small>une faute = phrase refus&eacute;e &middot; parfaites : FR ${perfect(L.fr)} % &middot; EN ${perfect(L.en)} %</small></div>
-    <div class="two">${card('fr')}${card('en')}${livre}</div>`;
+    <div class="two">${card('fr')}${card('en')}${livre}${cerveau}</div>`;
 }
-const sentences = () => [...st.lang.sentences, ...st.lecture.phrases].sort((a, b) => b.t - a.t);
+const sentences = () => [...st.lang.sentences, ...st.lecture.phrases, ...ensureCerveau(st).phrases].sort((a, b) => b.t - a.t);
+// ---------- cerveau neuronal (mini-GPT) + juge strict LanguageTool ----------
+const BRAIN_URL = 'https://cdn.jsdelivr.net/gh/zelkoappstore-cloud/robloxprojecy@BRAIN_SHA/factubot/cerveau/cerveau.bin';
+const BRAIN_SECONDS = 8, LT = 'https://api.languagetool.org/v2/check';
+const ensureCerveau = s => (s.cerveau ||= { seq: 0, ok: [], phrases: [] });
+let brainBusy = false, brainT = 3, brainState = 'chargement du cerveau...';
+let brain = null, brainInfoV = null, reqId = 0;
+const pending = new Map(), brainInfo = () => brainInfoV, brainReady = () => !!brainInfoV;
+try {
+  brain = new Worker(new URL('./cerveau-worker.js', import.meta.url), { type: 'module' });
+  brain.onmessage = ({ data }) => {
+    if (data.info) { brainInfoV = data.info; brainState = ''; langUI(); }
+    else if (pending.has(data.id)) { pending.get(data.id)(data); pending.delete(data.id); }
+    else if (data.error) { brainState = 'cerveau pas encore disponible'; langUI(); }
+  };
+  brain.postMessage({ url: BRAIN_URL });
+} catch { brainState = 'cerveau non support&eacute; par ce navigateur'; }
+const generate = () => new Promise((ok, ko) => { const id = ++reqId; pending.set(id, d => d.error ? ko(new Error(d.error)) : ok(d.text)); brain.postMessage({ gen: 1, id }); });
+async function judgeLT(s) {
+  const errs = [], n = s.split(/\s+/).length;
+  if (n < 5) errs.push('phrase trop courte (au moins 5 mots)'); if (n > 30) errs.push('phrase trop longue (30 mots maximum)');
+  if (!/^[A-ZÀÂÉÈÊÎÔŒ]/.test(s)) errs.push('pas de majuscule au début'); if (!/[.!?]$/.test(s)) errs.push('pas de point à la fin');
+  const rep = /\b(\p{L}{4,})\b.*\b\1\b/iu.exec(s); if (rep) errs.push(`mot répété : « ${rep[1]} »`);
+  if (st.cerveau.phrases.some(p => p.out === s)) errs.push('phrase déjà dite : il faut inventer');
+  const r = await fetch(LT, { method: 'POST', body: new URLSearchParams({ text: s, language: 'fr' }) });
+  if (!r.ok) throw new Error('juge indisponible');
+  for (const m of (await r.json()).matches) if (!/WHITESPACE|APOS|TYPOGRAPH|NBSP/i.test(m.rule.id)) errs.push(`${m.message} (« ${s.slice(m.offset, m.offset + m.length)} »)`);
+  return errs;
+}
+async function brainTick(dt) {
+  if ((brainT -= dt) > 0 || brainBusy || !brainReady() || document.hidden) return;
+  brainT = BRAIN_SECONDS; brainBusy = true;
+  try {
+    const out = await generate(), errs = await judgeLT(out), C = ensureCerveau(st), ok = !errs.length;
+    C.seq++; C.ok.push(ok ? 1 : 0); if (C.ok.length > 50) C.ok.shift();
+    C.phrases.unshift({ seq: C.seq, lang: 'cerveau', out, score: ok ? 100 : Math.max(0, 60 - 20 * (errs.length - 1)), errs: errs.slice(0, 4), t: Date.now() });
+    if (C.phrases.length > 30) C.phrases.length = 30;
+    brainState = ''; langUI();
+    if (!document.getElementById('drawer').hidden && mode === 'lang') list();
+  } catch { brainState = 'juge occupé, je réessaie'; brainT = 30; langUI(); }
+  brainBusy = false;
+}
 const cls = s => s >= 90 ? 'g' : s >= 60 ? 'm' : 'b';
 let mode = 'docs';
 function list() {
@@ -211,6 +256,8 @@ function show(i) {
   document.querySelectorAll('#list li').forEach(li => li.classList.toggle('on', +li.dataset.i === i));
   if (mode === 'lang') {
     const s = sentences()[i]; if (!s) return;
+    if (s.lang === 'cerveau') { document.getElementById('view').innerHTML = `<div class="sheet"><div class="sens">Cerveau neuronal (mini-GPT entra&icirc;n&eacute; sur Wikip&eacute;dia et des livres du domaine public)</div><small>Phrase du robot</small><p class="${s.score === 100 ? 'ok' : 'ko'}">${esc(s.out)}</p></div>
+      <div class="notes"><div class="big">${s.score}/100</div><h4>Juge strict (LanguageTool)</h4>${s.errs.length ? '<ul>' + s.errs.map(x => `<li class="bad">${esc(x)}</li>`).join('') + '</ul>' : '<p>Aucune faute.</p>'}<h4>Comment il apprend</h4><p>Il a lu des centaines de milliers de phrases en devinant chaque mot suivant. Ensuite, ses phrases ont &eacute;t&eacute; corrig&eacute;es par LanguageTool et seules les parfaites ont servi &agrave; le r&eacute;-entra&icirc;ner.</p></div>`; return; }
     if (s.lang === 'livre') { document.getElementById('view').innerHTML = `<div class="sheet"><div class="sens">Lecture libre &middot; phrase invent&eacute;e d&rsquo;apr&egrave;s ${BOOKS.books} livres</div><small>Phrase du robot</small><p class="${s.score === 100 ? 'ok' : 'ko'}">${esc(s.out)}</p></div>
       <div class="notes"><div class="big">${s.score}/100</div><h4>Fautes relev&eacute;es</h4>${s.errs.length ? '<ul>' + s.errs.map(x => `<li class="bad">${esc(x)}</li>`).join('') + '</ul>' : '<p>Aucune faute.</p>'}
       <h4>Comment il apprend</h4><p>Des livres, il n&rsquo;a gard&eacute; que des statistiques : quels mots se suivent, quels noms vont avec le / la / les. Il invente une phrase mot par mot. Le juge strict refuse toute phrase trop courte ou trop longue, mal termin&eacute;e, avec un mauvais accord, une n&eacute;gation incompl&egrave;te ou recopi&eacute;e du livre ; le robot affaiblit alors l&rsquo;encha&icirc;nement de mots fautif.</p></div>`; return; }
@@ -227,11 +274,45 @@ function show(i) {
 }
 function openDrawer(m) {
   mode = m; document.getElementById('dtitle').innerHTML = m === 'docs' ? 'Documents g&eacute;n&eacute;r&eacute;s' : 'Cahier de langues (fran&ccedil;ais / anglais)';
-  document.getElementById('drawer').hidden = false; list();
+  document.getElementById('drawer').hidden = false; document.getElementById('list').style.display = ''; list();
   if ((m === 'docs' ? st.docs : sentences()).length) show(0); else document.getElementById('view').innerHTML = '<p class="hint">Rien pour l&rsquo;instant.</p>';
 }
 document.getElementById('open').onclick = () => openDrawer('docs');
 document.getElementById('openLang').onclick = () => openDrawer('lang');
+// ---------- analyse de sites web ----------
+const webHist = () => { try { return JSON.parse(localStorage.getItem('factubot-web') || '[]'); } catch { return []; } };
+function webView(r, err) {
+  const g = r?.grammar;
+  return `<div class="web"><form id="wf"><input id="wu" type="url" inputmode="url" placeholder="https://exemple.com" value="${esc(r?.url || '')}" required><button id="wb">Analyser</button></form>
+    ${err ? `<div class="card err">${esc(err)}</div>` : ''}${!r ? '<p class="muted">FactuBot lit la page, d&eacute;tecte la langue, trouve les mots-cl&eacute;s, r&eacute;sume, v&eacute;rifie la grammaire d&rsquo;un extrait avec son juge strict et donne son avis.</p>' : `
+    <div class="card"><h4>${esc(r.title || r.host)}</h4><p class="muted">${esc(r.url)}</p>${r.description ? `<p>${esc(r.description)}</p>` : ''}</div>
+    <div class="card"><h4>L&rsquo;avis de FactuBot</h4>${r.verdict.map(v => `<p>${esc(v)}</p>`).join('')}</div>
+    <div class="card kv"><div><small>Langue</small>${{ fr: 'fran&ccedil;ais', en: 'anglais' }[r.lang] || '?'}</div><div><small>Mots</small>${r.words.toLocaleString('fr-BE')}</div><div><small>Lecture</small>${r.readingMin} min</div>
+      <div><small>Phrases</small>${r.sentences} (moy. ${r.avgLen} mots)</div><div><small>Liens</small>${r.links.internes} int. / ${r.links.externes} ext.</div><div><small>Images sans alt</small>${r.images.sansAlt} / ${r.images.total}</div><div><small>S&eacute;curis&eacute;</small>${r.https ? 'oui (https)' : 'non'}</div></div>
+    ${r.keywords.length ? `<div class="card chips"><h4>Mots-cl&eacute;s</h4>${r.keywords.map(k => `<span>${esc(k.w)} &middot; ${k.n}</span>`).join('')}</div>` : ''}
+    ${r.summary.length ? `<div class="card"><h4>R&eacute;sum&eacute; (phrases cl&eacute;s)</h4><ul>${r.summary.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+    ${g ? `<div class="card"><h4>Juge strict : ${g.errors} faute${g.errors > 1 ? 's' : ''} possible${g.errors > 1 ? 's' : ''} sur un extrait de ${g.checked} caract&egrave;res</h4>${g.list.length ? `<ul>${g.list.map(x => `<li><b>${esc(x.msg)}</b><br><span class="muted">&hellip;${esc(x.extrait)}&hellip;${x.propose.length ? ' &rarr; ' + esc(x.propose.join(' / ')) : ''}</span></li>`).join('')}</ul>` : '<p>Rien &agrave; signaler.</p>'}</div>` : ''}
+    ${r.heads.length ? `<div class="card"><h4>Structure des titres</h4><ul>${r.heads.map(h => `<li style="margin-left:${(h.n - 1) * 14}px">h${h.n} &middot; ${esc(h.t)}</li>`).join('')}</ul></div>` : ''}`}
+    ${webHist().length ? `<div class="card"><h4>Mes derni&egrave;res analyses</h4><ul>${webHist().map(h => `<li><a href="#" data-u="${esc(h.url)}">${esc(h.title || h.url)}</a> <span class="muted">${h.words} mots</span></li>`).join('')}</ul></div>` : ''}</div>`;
+}
+function openWeb(r, err) {
+  mode = 'web'; document.getElementById('dtitle').innerHTML = 'Analyse de site web';
+  document.getElementById('drawer').hidden = false; document.getElementById('list').innerHTML = ''; document.getElementById('list').style.display = 'none';
+  const v = document.getElementById('view'); v.innerHTML = webView(r, err);
+  v.querySelectorAll('[data-u]').forEach(a => a.onclick = e => { e.preventDefault(); analyseSite(a.dataset.u); });
+  document.getElementById('wf').onsubmit = e => { e.preventDefault(); analyseSite(document.getElementById('wu').value); };
+}
+async function analyseSite(url) {
+  const b = document.getElementById('wb'); if (b) { b.disabled = true; b.textContent = 'Lecture...'; }
+  said = 'Je lis un site web...';
+  try {
+    const r = await fetch('/api/analyse?url=' + encodeURIComponent(url)), j = await r.json();
+    if (!r.ok) return openWeb(null, j.error || 'analyse impossible');
+    try { localStorage.setItem('factubot-web', JSON.stringify([{ url: j.url, title: j.title, words: j.words }, ...webHist().filter(h => h.url !== j.url)].slice(0, 8))); } catch { /* prive */ }
+    said = esc(j.verdict[0]); openWeb(j);
+  } catch { openWeb(null, 'analyse impossible (r&eacute;seau)'); }
+}
+document.getElementById('openWeb').onclick = () => openWeb();
 document.getElementById('close').onclick = () => { document.getElementById('drawer').hidden = true; };
 document.getElementById('list').onclick = e => { const li = e.target.closest('li'); if (li) show(+li.dataset.i); };
 
@@ -242,7 +323,7 @@ async function push() {
   if (!online) return;
   try {
     const r = await fetch('/api/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(snapshot()) });
-    const j = await r.json(); if (r.status === 409) { st = j.state; ensureLang(st); ensureLecture(st); ui(); langUI(); begin(); } else if (j.version) st.version = j.version;
+    const j = await r.json(); if (r.status === 409) { st = j.state; ensureLang(st); ensureLecture(st); ensureCerveau(st); ui(); langUI(); begin(); } else if (j.version) st.version = j.version;
   } catch { /* reessai plus tard */ }
 }
 setInterval(save, 5000); setInterval(push, 180000);
@@ -251,7 +332,7 @@ if (!st.seq) addLog(st, 'Premier jour. Je ne sais pas encore ce qu&rsquo;est une
 if (!st.lang.seq) addLog(st, 'Je commence aussi le fran&ccedil;ais et l&rsquo;anglais : je ne connais encore aucun mot.', 'ok');
 
 const v = new THREE.Vector3(), clock = new THREE.Clock(); let scrT = 0;
-function update(dt) { step(dt); langStep(dt); readTick(dt); bot.update(dt); }
+function update(dt) { step(dt); langStep(dt); readTick(dt); brainTick(dt); bot.update(dt); }
 function loop() {
   const dt = Math.min(clock.getDelta(), .05); update(dt);
   if ((scrT -= dt) < 0) { drawScreen(); scrT = .15; }
@@ -261,4 +342,5 @@ function loop() {
   controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
 }
 window.FB = { get st() { return st; }, update };   // inspection / tests
+ensureCerveau(st);
 begin(); ui(); langUI(); drawBoard(); loop();
