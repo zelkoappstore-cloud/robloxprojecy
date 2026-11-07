@@ -15,7 +15,7 @@ html,body{height:100%;overflow:hidden;background:#eef0f3;font:13px/1.4 system-ui
 #curve{background:rgba(255,255,255,.88);border:1px solid #dde3ea;border-radius:10px}
 #log{position:fixed;right:14px;top:14px;width:300px;max-height:60%;overflow:auto;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:12px}
 #log li{padding:4px 8px;border-radius:8px;background:rgba(255,255,255,.9)}#log li.ok{background:#e8f7ee}#log li.ko{background:#fdecec}
-#foot{position:fixed;left:16px;bottom:12px;color:#6a7686;font-size:11px}
+#foot{position:fixed;left:16px;bottom:12px;color:#6a7686;font-size:11px}#foot a{color:inherit}
 #lang{position:fixed;left:16px;bottom:34px;z-index:4;width:min(620px,calc(100vw - 32px));background:rgba(255,255,255,.94);border:1px solid #dde3ea;border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(20,30,50,.1)}
 #lang .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
 #lang .top b{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#d0452f}#lang .top small{color:#6a7686}
