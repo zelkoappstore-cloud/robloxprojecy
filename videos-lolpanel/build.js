@@ -121,8 +121,8 @@ const SCENES = [
    <div class="it hl" style="--d:6.8s">Hero</div><div class="it hl" style="--d:8.3s">Stats</div><div class="it">Pricing</div><div class="it">FAQ</div><div class="it">Footer</div></div>
   <div class="canvas" style="--c:9.4s">
    <div class="blk hero" style="--d:7.3s"><h4 class="ttl" style="--c:9.4s">Ship faster.</h4><p>Your landing page, built in minutes.</p><span class="btn" style="--c:9.4s">Start →</span></div>
-   <div class="row"><div class="blk" style="--d:8.6s"><b>12k</b><em>users</em></div><div class="blk" style="--d:8.72s"><b>99%</b><em>uptime</em></div><div class="blk" style="--d:8.84s"><b>4.9★</b><em>rating</em></div></div>
-   <div class="row"><div class="blk" style="--d:9.0s"><em>Starter</em><b>0 €</b></div><div class="blk" style="--d:9.1s;border-color:var(--ac)"><em>Pro</em><b>9 €</b></div><div class="blk" style="--d:9.2s"><em>Team</em><b>29 €</b></div></div>
+   <div class="row"><div class="blk" style="--d:8.6s"><b>01</b><em>Build</em></div><div class="blk" style="--d:8.72s"><b>02</b><em>Edit</em></div><div class="blk" style="--d:8.84s"><b>03</b><em>Ship</em></div></div>
+   <div class="row"><div class="blk" style="--d:9.0s"><b>⚡</b><em>Fast</em></div><div class="blk" style="--d:9.1s;border-color:var(--ac)"><b>◎</b><em>Responsive</em></div><div class="blk" style="--d:9.2s"><b>⇄</b><em>Export</em></div></div>
   </div>
   <div class="panel"><small>Accent</small>
    <div class="sw"><i style="background:#8b5cf6"><span class="ring r1" style="--c:9.4s"></span></i><i style="background:#22d3ee"><span class="ring r2" style="--c:9.4s"></span></i><i style="background:#f472b6"></i><i style="background:#34d399"></i></div>
