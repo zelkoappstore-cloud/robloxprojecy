@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FactuBot - un robot apprend seul a rediger factures et contrats, et a ecrire en francais et en anglais</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<div id="btns"><button id="open">&#128196; Aper&ccedil;u des documents</button><button id="openLang">&#128483; Cahier de langues</button></div>
+<header id="hud"><h1>FACTU<span>BOT</span></h1><div id="stats"></div><canvas id="curve" width="260" height="70"></canvas></header>
+<section id="lang" aria-live="polite"></section>
+<aside id="drawer" hidden>
+  <div class="bar"><b id="dtitle">Documents g&eacute;n&eacute;r&eacute;s</b><button id="close">&times;</button></div>
+  <div class="cols"><ol id="list"></ol><div id="view"><p class="hint">Choisis un document.</p></div></div>
+</aside>
+<ol id="log"></ol>
+<footer id="foot">Un robot seul, sans humain : il r&eacute;dige, &eacute;crit en fran&ccedil;ais et en anglais, se fait corriger, apprend. Tous les documents sont FICTIFS et sans valeur.</footer>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
