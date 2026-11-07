@@ -4,13 +4,14 @@
 // En parallele il suit un cours de langues (francais + anglais, juge strict) : voir langue.js.
 import { LEVELS, CHOICES, makeContext, keysFor, judge } from './levels.js';
 import { newLang, ensureLang, simulateLang } from './langue.js';
+import { newLecture, ensureLecture, simulateLecture } from './lecture.js';
 
 export const VERSION = 1, DOC_SECONDS = 20, KEEP = 30;
 const LR = .12, UNLOCK = 95, WINDOW = 30;
 
 export function newState() {
   return { v: VERSION, version: 0, updatedAt: Date.now(), level: 1, maxLevel: 1, seq: 0, policy: {}, base: {},
-    docs: [], recent: [], history: [], best: 0, mistakes: {}, log: [], lang: newLang() };
+    docs: [], recent: [], history: [], best: 0, mistakes: {}, log: [], lang: newLang(), lecture: newLecture() };
 }
 const softmax = z => { const m = Math.max(...z), e = z.map(v => Math.exp(v - m)), t = e.reduce((a, b) => a + b, 0); return e.map(v => v / t); };
 const nOpts = k => CHOICES[k.id].opts.length;
@@ -67,11 +68,13 @@ export function weakSpot(st) {
 
 // fait travailler le robot pendant l'absence de tout visiteur : documents ET cours de langues
 export function simulate(st, seconds) {
-  ensureLang(st);
+  ensureLang(st); ensureLecture(st);
   const n = Math.min(Math.floor(seconds / DOC_SECONDS), 3000);
   for (let i = 0; i < n; i++) finishDoc(st, startDoc(st));
   const l = simulateLang(st, seconds);
   if (l.n) addLog(st, `${l.n} phrases (fran&ccedil;ais / anglais) &eacute;crites et corrig&eacute;es pendant l&rsquo;absence`, 'ok');
   l.ups.forEach(u => addLog(st, u, 'ok'));
+  const r = simulateLecture(st, seconds);
+  if (r) addLog(st, `${r} phrases libres invent&eacute;es d&rsquo;apr&egrave;s mes livres`, 'ok');
   return n;
 }

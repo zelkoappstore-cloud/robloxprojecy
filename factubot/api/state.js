@@ -4,6 +4,7 @@
 import { put, head, list, del } from '@vercel/blob';
 import { VERSION, newState, simulate, addLog } from '../js/writer.js';
 import { ensureLang } from '../js/langue.js';
+import { ensureLecture, loadLecture } from '../js/lecture.js';
 
 // Chaque sauvegarde va dans un NOUVEAU fichier (factubot/v/000000042.json) : une adresse jamais lue
 // n'a pas de copie en cache sur le CDN, donc on relit toujours la vraie derniere version.
@@ -29,7 +30,7 @@ async function write(s) {
 }
 // rattrape le temps ecoule
 function catchUp(s) {
-  ensureLang(s);
+  ensureLang(s); ensureLecture(s);
   const away = (Date.now() - (s.updatedAt || Date.now())) / 1000;
   if (away > 30) { const n = simulate(s, away); if (n) addLog(s, `${n} documents r&eacute;dig&eacute;s pendant votre absence`, 'ok'); }
   s.updatedAt = Date.now();
@@ -38,6 +39,7 @@ function catchUp(s) {
 
 export default async function handler(req, res) {
   res.setHeader('cache-control', 'no-store');
+  await loadLecture();                                                // modele de lecture (une fois par instance)
   try {
     if (req.method === 'POST') {
       let s = req.body; if (typeof s === 'string') s = JSON.parse(s);
@@ -47,7 +49,7 @@ export default async function handler(req, res) {
         if (catchUp(cur)) { cur.version++; await write(cur); }
         return res.status(409).json({ state: cur });
       }
-      ensureLang(s);
+      ensureLang(s); ensureLecture(s);
       s.version = (cur?.version || 0) + 1; s.updatedAt = Date.now();
       await write(s);
       return res.status(200).json({ version: s.version });

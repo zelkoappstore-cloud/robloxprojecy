@@ -6,6 +6,7 @@ import { Robot } from './robot.js';
 import { LEVELS } from './levels.js';
 import { VERSION, DOC_SECONDS, newState, startDoc, finishDoc, simulate, weakSpot, addLog } from './writer.js';
 import { LANG_LEVELS, LANGS, LANG_SECONDS, ensureLang, lessonStep } from './langue.js';
+import { READ_SECONDS, BOOKS, ensureLecture, readStep, acceptRate, loadLecture } from './lecture.js';
 import { renderDoc } from './render.js';
 
 const KEY = 'factubot-v1';
@@ -15,14 +16,15 @@ const store = { get(k) { try { return localStorage.getItem(k); } catch { return 
 
 // ---------- etat : le serveur l'a fait travailler pendant l'absence ----------
 async function load() {
-  try { const r = await fetch('/api/state', { cache: 'no-store' }); if (r.ok) { const s = await r.json(); if (s.v === VERSION) { ensureLang(s); return [s, true]; } } } catch { /* local */ }
+  try { const r = await fetch('/api/state', { cache: 'no-store' }); if (r.ok) { const s = await r.json(); if (s.v === VERSION) { ensureLang(s); ensureLecture(s); return [s, true]; } } } catch { /* local */ }
   let s = null; try { s = JSON.parse(store.get(KEY) || 'null'); } catch { /* corrompu */ }
   if (s?.v !== VERSION) return [newState(), false];
-  ensureLang(s);
+  ensureLang(s); ensureLecture(s);
   const away = (Date.now() - s.updatedAt) / 1000;
   if (away > 30) { const n = simulate(s, away); if (n) addLog(s, `${n} documents r&eacute;dig&eacute;s pendant votre absence`, 'ok'); }
   return [s, false];
 }
+await loadLecture();
 let [st, online] = await load();
 
 // ---------- scene : bureau sur plateforme blanche ----------
@@ -112,14 +114,22 @@ function judged() {
   ui(); if (!document.getElementById('drawer').hidden && mode === 'docs') list();
 }
 // cours de langues : une phrase toutes les LANG_SECONDS, en alternant francais et anglais
-let langT = 0;
-const last = { fr: null, en: null };
+let langT = 0, readT = 1.2;
+const last = { fr: null, en: null, livre: null };
 function langStep(dt) {
   if ((langT -= dt) > 0) return;
   langT = LANG_SECONDS;
   const r = lessonStep(st); last[r.lang] = r;
   if (r.up) { addLog(st, r.up, 'ok'); said = `<b>${esc(r.up)}</b>`; ui(); }
   langUI(); drawBoard();
+  if (!document.getElementById('drawer').hidden && mode === 'lang') list();
+}
+// atelier de lecture : une phrase libre inventee d'apres les livres, corrigee par le juge strict
+function readTick(dt) {
+  if ((readT -= dt) > 0) return;
+  readT = READ_SECONDS;
+  const r = readStep(st); if (!r) return;
+  last.livre = r; langUI(); drawBoard();
   if (!document.getElementById('drawer').hidden && mode === 'lang') list();
 }
 function drawScreen() {
@@ -142,14 +152,17 @@ function drawBoard() {
   const W = board.width, H = board.height; bctx.fillStyle = '#23412f'; bctx.fillRect(0, 0, W, H);
   bctx.fillStyle = 'rgba(255,255,255,.85)'; bctx.font = 'bold 22px system-ui'; bctx.fillText('Cours de langues - juge strict', 20, 34);
   ['fr', 'en'].forEach((l, k) => {
-    const r = last[l], y0 = 70 + k * 145, T = st.lang[l];
+    const r = last[l], y0 = 66 + k * 100, T = st.lang[l];
     bctx.fillStyle = '#f2d36b'; bctx.font = 'bold 17px system-ui';
     bctx.fillText(`${LANGS[l]} - niveau ${T.maxLevel}/6${T.mastered ? ' (maitrise)' : ''}`, 20, y0);
     if (!r) return;
     bctx.font = '24px Georgia'; bctx.fillStyle = r.exact ? '#bff0c9' : '#ffb4a8';
-    wrap(bctx, (r.exact ? '' : 'x ') + r.out, 20, y0 + 34, W - 40, 28, 2);
-    if (!r.exact) { bctx.fillStyle = '#ffffff'; bctx.font = '20px Georgia'; wrap(bctx, 'v ' + r.ref, 20, y0 + 92, W - 40, 24, 1); }
+    wrap(bctx, (r.exact ? '' : 'x ') + r.out, 20, y0 + 30, W - 40, 26, 1);
+    if (!r.exact) { bctx.fillStyle = '#ffffff'; bctx.font = '19px Georgia'; wrap(bctx, 'v ' + r.ref, 20, y0 + 58, W - 40, 22, 1); }
   });
+  const b = last.livre; bctx.fillStyle = '#f2d36b'; bctx.font = 'bold 17px system-ui';
+  bctx.fillText(`Lecture libre - ${acceptRate(st.lecture)} % accept\u00e9es`, 20, 270);
+  if (b) { bctx.font = '20px Georgia'; bctx.fillStyle = b.score === 100 ? '#bff0c9' : '#ffb4a8'; wrap(bctx, (b.score === 100 ? '' : 'x ') + b.out, 20, 300, W - 40, 24, 2); }
   btex.needsUpdate = true;
 }
 
@@ -159,7 +172,7 @@ function ui() {
   const recent = st.docs.slice(0, 20).map(d => d.score), L = st.lang;
   const lv = t => `${t.maxLevel}/6${t.mastered ? ' &#10003;' : ''}`;
   document.getElementById('stats').innerHTML = [['Documents', st.seq], ['Niveau', `${st.maxLevel}/6${st.mastered ? ' &#10003;' : ''}`], ['Moyenne (20 dern.)', avg(recent) + '/100'], ['Record', st.best + '/100'],
-    ['Fran&ccedil;ais', lv(L.fr)], ['Anglais', lv(L.en)], ['Phrases', L.seq], ['Serveur', online ? 'en continu' : 'local']]
+    ['Fran&ccedil;ais', lv(L.fr)], ['Anglais', lv(L.en)], ['Phrases', L.seq], ['Lecture', acceptRate(st.lecture) + ' %'], ['Serveur', online ? 'en continu' : 'local']]
     .map(([k, v]) => `<div class="stat"><small>${k}</small><strong>${v}</strong></div>`).join('');
   const c = document.getElementById('curve'), x = c.getContext('2d'), h = st.history;
   x.clearRect(0, 0, c.width, c.height); x.fillStyle = '#6a7686'; x.font = '10px system-ui'; x.fillText('Qualite moyenne (par 10 documents)', 8, 12);
@@ -179,20 +192,28 @@ function langUI() {
       <div class="sens">${esc(r.sens)}</div><div class="out ${ok ? 'ok' : 'ko'}">${esc(r.out)}</div>
       ${ok ? '' : `<div class="ref">${esc(r.ref)}</div><ul>${r.errs.slice(0, 2).map(e => `<li>${esc(e)}</li>`).join('')}</ul>`}${meter}</div>`;
   };
+  const b = last.livre || st.lecture.phrases[0];
+  const livre = `<div class="lc wide"><h5><span>Lecture libre &middot; ${BOOKS.books} livres lus (${BOOKS.words.toLocaleString('fr-BE')} mots, ${BOOKS.vocab.toLocaleString('fr-BE')} mots diff&eacute;rents)</span><span>${b ? b.score + '/100' : ''}</span></h5>
+    <div class="sens">Il invente ses propres phrases d&rsquo;apr&egrave;s ses lectures &middot; accept&eacute;es par le juge : ${acceptRate(st.lecture)} %</div>
+    ${b ? `<div class="out ${b.score === 100 ? 'ok' : 'ko'}">${esc(b.out)}</div>${b.errs.length ? `<ul>${b.errs.slice(0, 2).map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}` : '<div class="sens">Premi&egrave;re lecture...</div>'}</div>`;
   document.getElementById('lang').innerHTML = `<div class="top"><b>Cours de langues &middot; juge strict</b><small>une faute = phrase refus&eacute;e &middot; parfaites : FR ${perfect(L.fr)} % &middot; EN ${perfect(L.en)} %</small></div>
-    <div class="two">${card('fr')}${card('en')}</div>`;
+    <div class="two">${card('fr')}${card('en')}${livre}</div>`;
 }
+const sentences = () => [...st.lang.sentences, ...st.lecture.phrases].sort((a, b) => b.t - a.t);
 const cls = s => s >= 90 ? 'g' : s >= 60 ? 'm' : 'b';
 let mode = 'docs';
 function list() {
   document.getElementById('list').innerHTML = mode === 'docs'
     ? st.docs.map((d, i) => `<li data-i="${i}"><span>#${d.seq} ${LEVELS[d.lv - 1].name}</span><span class="sc ${cls(d.score)}">${d.score}</span></li>`).join('')
-    : st.lang.sentences.map((s, i) => `<li data-i="${i}"><span>#${s.seq} ${s.lang.toUpperCase()} &middot; ${esc(s.out.slice(0, 24))}</span><span class="sc ${cls(s.score)}">${s.score}</span></li>`).join('');
+    : sentences().map((s, i) => `<li data-i="${i}"><span>#${s.seq} ${s.lang.toUpperCase()} &middot; ${esc(s.out.slice(0, 24))}</span><span class="sc ${cls(s.score)}">${s.score}</span></li>`).join('');
 }
 function show(i) {
   document.querySelectorAll('#list li').forEach(li => li.classList.toggle('on', +li.dataset.i === i));
   if (mode === 'lang') {
-    const s = st.lang.sentences[i]; if (!s) return;
+    const s = sentences()[i]; if (!s) return;
+    if (s.lang === 'livre') { document.getElementById('view').innerHTML = `<div class="sheet"><div class="sens">Lecture libre &middot; phrase invent&eacute;e d&rsquo;apr&egrave;s ${BOOKS.books} livres</div><small>Phrase du robot</small><p class="${s.score === 100 ? 'ok' : 'ko'}">${esc(s.out)}</p></div>
+      <div class="notes"><div class="big">${s.score}/100</div><h4>Fautes relev&eacute;es</h4>${s.errs.length ? '<ul>' + s.errs.map(x => `<li class="bad">${esc(x)}</li>`).join('') + '</ul>' : '<p>Aucune faute.</p>'}
+      <h4>Comment il apprend</h4><p>Des livres, il n&rsquo;a gard&eacute; que des statistiques : quels mots se suivent, quels noms vont avec le / la / les. Il invente une phrase mot par mot. Le juge strict refuse toute phrase trop courte ou trop longue, mal termin&eacute;e, avec un mauvais accord, une n&eacute;gation incompl&egrave;te ou recopi&eacute;e du livre ; le robot affaiblit alors l&rsquo;encha&icirc;nement de mots fautif.</p></div>`; return; }
     document.getElementById('view').innerHTML = `<div class="sheet"><div class="sens">${LANGS[s.lang]} &middot; niveau ${s.lv} (${LANG_LEVELS[s.lv - 1].name}) &middot; confiance ${s.conf} %${s.retry ? ` &middot; essai n&deg;${s.retry + 1}` : ''}<br>Sens demand&eacute; : ${esc(s.sens)}</div>
       <small>Phrase du robot</small><p class="${s.score === 100 ? 'ok' : 'ko'}">${esc(s.out)}</p>${s.score === 100 ? '' : `<small>Correction du juge</small><p class="ok">${esc(s.ref)}</p>`}</div>
       <div class="notes"><div class="big">${s.score}/100</div><h4>Fautes relev&eacute;es</h4>${s.errs.length ? '<ul>' + s.errs.map(x => `<li class="bad">${esc(x)}</li>`).join('') + '</ul>' : '<p>Aucune faute.</p>'}
@@ -207,7 +228,7 @@ function show(i) {
 function openDrawer(m) {
   mode = m; document.getElementById('dtitle').innerHTML = m === 'docs' ? 'Documents g&eacute;n&eacute;r&eacute;s' : 'Cahier de langues (fran&ccedil;ais / anglais)';
   document.getElementById('drawer').hidden = false; list();
-  if ((m === 'docs' ? st.docs : st.lang.sentences).length) show(0); else document.getElementById('view').innerHTML = '<p class="hint">Rien pour l&rsquo;instant.</p>';
+  if ((m === 'docs' ? st.docs : sentences()).length) show(0); else document.getElementById('view').innerHTML = '<p class="hint">Rien pour l&rsquo;instant.</p>';
 }
 document.getElementById('open').onclick = () => openDrawer('docs');
 document.getElementById('openLang').onclick = () => openDrawer('lang');
@@ -221,7 +242,7 @@ async function push() {
   if (!online) return;
   try {
     const r = await fetch('/api/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(snapshot()) });
-    const j = await r.json(); if (r.status === 409) { st = j.state; ensureLang(st); ui(); langUI(); begin(); } else if (j.version) st.version = j.version;
+    const j = await r.json(); if (r.status === 409) { st = j.state; ensureLang(st); ensureLecture(st); ui(); langUI(); begin(); } else if (j.version) st.version = j.version;
   } catch { /* reessai plus tard */ }
 }
 setInterval(save, 5000); setInterval(push, 180000);
@@ -230,7 +251,7 @@ if (!st.seq) addLog(st, 'Premier jour. Je ne sais pas encore ce qu&rsquo;est une
 if (!st.lang.seq) addLog(st, 'Je commence aussi le fran&ccedil;ais et l&rsquo;anglais : je ne connais encore aucun mot.', 'ok');
 
 const v = new THREE.Vector3(), clock = new THREE.Clock(); let scrT = 0;
-function update(dt) { step(dt); langStep(dt); bot.update(dt); }
+function update(dt) { step(dt); langStep(dt); readTick(dt); bot.update(dt); }
 function loop() {
   const dt = Math.min(clock.getDelta(), .05); update(dt);
   if ((scrT -= dt) < 0) { drawScreen(); scrT = .15; }
