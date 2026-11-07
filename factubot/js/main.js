@@ -205,7 +205,7 @@ function langUI() {
 }
 const sentences = () => [...st.lang.sentences, ...st.lecture.phrases, ...ensureCerveau(st).phrases].sort((a, b) => b.t - a.t);
 // ---------- cerveau neuronal (mini-GPT) + juge strict LanguageTool ----------
-const BRAIN_URL = 'https://cdn.jsdelivr.net/gh/zelkoappstore-cloud/robloxprojecy@BRAIN_SHA/factubot/cerveau/cerveau.bin';
+const BRAIN_URL = 'https://cdn.jsdelivr.net/gh/zelkoappstore-cloud/robloxprojecy@967bb57cea45555c33cde05874b962c417ed5bbe/factubot/cerveau/cerveau.bin';
 const BRAIN_SECONDS = 8, LT = 'https://api.languagetool.org/v2/check';
 const ensureCerveau = s => (s.cerveau ||= { seq: 0, ok: [], phrases: [] });
 let brainBusy = false, brainT = 3, brainState = 'chargement du cerveau...';
