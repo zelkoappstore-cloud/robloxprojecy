@@ -218,7 +218,7 @@ try {
     else if (pending.has(data.id)) { pending.get(data.id)(data); pending.delete(data.id); }
     else if (data.error) { brainState = 'cerveau pas encore disponible'; langUI(); }
   };
-  brain.postMessage({ url: BRAIN_URL });
+  brain.postMessage({ urls: [BRAIN_URL, BRAIN_URL.replace('https://cdn.jsdelivr.net/gh/', 'https://raw.githubusercontent.com/').replace('@', '/')] });
 } catch { brainState = 'cerveau non support&eacute; par ce navigateur'; }
 const generate = () => new Promise((ok, ko) => { const id = ++reqId; pending.set(id, d => d.error ? ko(new Error(d.error)) : ok(d.text)); brain.postMessage({ gen: 1, id }); });
 async function judgeLT(s) {
