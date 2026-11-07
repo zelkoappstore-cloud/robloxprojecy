@@ -57,19 +57,25 @@ box-shadow:0 60px 160px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.12);opacity:
 const words = (txt, d0, step = .14) => txt.split(' ').map((w, i) =>
   `<span class="w" style="--d:${(d0 + i * step).toFixed(2)}s">${w}</span>`).join(' ');
 const sc = (s, e, html) => `<section class="scene" style="--s:${s}s;--e:${e}s">${html}</section>`;
+// Textes : LANG=fr pour la version française (même vidéo, seul le texte change)
+const LANG = process.env.LANG_PUB || 'en';
+const TXT = {
+  en: { s1: 'Design it.', s2a: 'Without writing', s2b: 'a single line.', s3: 'Stack. Edit.', s3g: 'Done.', s4a: 'Then take', s4g: 'the code.', end: 'Free. For everyone.' },
+  fr: { s1: 'Créez.', s2a: 'Sans écrire', s2b: 'une seule ligne.', s3: 'Empilez. Éditez.', s3g: 'Terminé.', s4a: 'Puis prenez', s4g: 'le code.', end: 'Gratuit. Pour tout le monde.' },
+}[LANG];
 const FW = ['HTML.', 'React.', 'Vue.', 'Svelte.', 'Tailwind.'];
 
 const SCENES = [
-  sc(0, 2.9, `<div class="t" style="font-size:150px">${words('Design it.', .3, .25)}</div>`),
-  sc(2.9, 5.4, `<div class="t" style="font-size:118px">${words('Without writing', 3.1)}<br>${words('a single line.', 3.6)}</div>`),
+  sc(0, 2.9, `<div class="t" style="font-size:150px">${words(TXT.s1, .3, .25)}</div>`),
+  sc(2.9, 5.4, `<div class="t" style="font-size:118px">${words(TXT.s2a, 3.1)}<br>${words(TXT.s2b, 3.6)}</div>`),
   sc(5.4, 11.0, `<div class="glow" style="--d:5.6s"></div>
-<div class="t fade" style="--d:5.5s;font-size:84px;margin-bottom:70px">Stack. Edit. <span class="grad">Done.</span></div>
+<div class="t fade" style="--d:5.5s;font-size:84px;margin-bottom:70px">${TXT.s3} <span class="grad">${TXT.s3g}</span></div>
 <div class="stage"><div class="win" style="--d:${WIN_IN}s">
  <img src="${shot('0blank')}">${CLICKS.map(([n, t]) => `<img src="${shot(n)}" style="--d:${(t + .1).toFixed(2)}s">`).join('')}
  <div id="rip"></div>
  <svg id="cur" viewBox="0 0 24 24"><path d="M4 2l16 9-7 2-3 7z" fill="#fff" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/></svg>
 </div></div>`),
-  sc(11.0, 14.4, `<div class="t fade" style="--d:11.1s;font-size:100px;margin-bottom:70px">Then take<br><span class="grad">the code.</span></div>
+  sc(11.0, 14.4, `<div class="t fade" style="--d:11.1s;font-size:100px;margin-bottom:70px">${TXT.s4a}<br><span class="grad">${TXT.s4g}</span></div>
 <div class="code" style="--d:11.3s"></div>`),
   sc(14.4, 16.1, FW.map((f, i) => {
     const d = 14.5 + i * .32, last = i === FW.length - 1;
@@ -77,7 +83,7 @@ const SCENES = [
   }).join('')),
   sc(16.1, 99, `<img class="logo" src="file://${path.join(__dirname, 'logo.png')}" style="--d:16.1s">
 <div class="t fade" style="--d:16.4s;font-size:120px">lolpanel</div>
-<div class="fade" style="--d:16.75s;font-size:48px;font-weight:500;color:var(--mu);margin-top:22px;letter-spacing:-.02em">Free. For everyone.</div>
+<div class="fade" style="--d:16.75s;font-size:48px;font-weight:500;color:var(--mu);margin-top:22px;letter-spacing:-.02em">${TXT.end}</div>
 <div class="fade" style="--d:17.1s;font-size:34px;font-weight:600;margin-top:90px">lolpanel.vercel.app</div>`),
 ];
 
@@ -109,7 +115,7 @@ window.seek=t=>{
   const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   await p.goto('file://' + htmlPath); await p.evaluate(() => document.fonts.ready);
   await p.waitForFunction(() => [...document.images].every(i => i.complete));
-  const out = path.join(__dirname, 'lolpanel-pub.mp4');
+  const out = path.join(__dirname, LANG === 'en' ? 'lolpanel-pub.mp4' : `lolpanel-pub-${LANG}.mp4`);
   // Son : musique chill + un clic à chaque clic du curseur, puis mixage avec l'image
   const addAudio = video => {
     const wav = path.join(tmp, 'a.wav'), muxed = path.join(tmp, 'muxed.mp4');
