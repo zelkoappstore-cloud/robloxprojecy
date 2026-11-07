@@ -109,7 +109,18 @@ window.seek=t=>{
   const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   await p.goto('file://' + htmlPath); await p.evaluate(() => document.fonts.ready);
   await p.waitForFunction(() => [...document.images].every(i => i.complete));
-  if (process.env.PREVIEW) {
+  const out = path.join(__dirname, 'lolpanel-pub.mp4');
+  // Son : musique chill + un clic à chaque clic du curseur, puis mixage avec l'image
+  const addAudio = video => {
+    const wav = path.join(tmp, 'a.wav'), muxed = path.join(tmp, 'muxed.mp4');
+    execFileSync('python3', [path.join(__dirname, 'audio.py'), wav, String(DUR), ...CLICKS.map(c => String(c[1]))]);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', video, '-i', wav, '-map', '0:v', '-map', '1:a',
+      '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', muxed]);
+    fs.copyFileSync(muxed, out);
+  };
+  if (process.env.AUDIO_ONLY) { // refait seulement le son, sur la vidéo existante
+    addAudio(out); console.log('OK', out);
+  } else if (process.env.PREVIEW) {
     for (const t of process.env.PREVIEW.split(',').map(Number)) {
       await p.evaluate(t => seek(t), t);
       await p.screenshot({ path: path.join(process.env.PREVIEW_DIR || __dirname, `prev-${t}.jpg`), type: 'jpeg', quality: 80 });
@@ -119,9 +130,10 @@ window.seek=t=>{
       await p.evaluate(t => seek(t), f / FPS);
       await p.screenshot({ path: path.join(tmp, `f${String(f).padStart(4, '0')}.jpg`), type: 'jpeg', quality: 92 });
     }
-    const out = path.join(__dirname, 'lolpanel-pub.mp4');
+    const silent = path.join(tmp, 'silent.mp4');
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(tmp, 'f%04d.jpg'),
-      '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
+      '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-pix_fmt', 'yuv420p', silent]);
+    addAudio(silent);
     console.log('OK', out);
   }
   await b.close(); fs.rmSync(tmp, { recursive: true, force: true });
