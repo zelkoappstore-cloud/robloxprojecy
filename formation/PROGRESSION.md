@@ -1,8 +1,10 @@
 # Progression : Formation Fullstack Pro
 
 ## Où on en est
-- Leçon actuelle : 0.1 La frontière de confiance
-- Prochaine étape : répondre aux questions de la leçon 0.1
+- Niveau de départ : ne sait pas encore coder (lolpanel a été entièrement codé par l'IA)
+- Leçon actuelle : A.1 C'est quoi du code ?
+- Prochaine étape : diagnostic rapide, puis leçon A.1
+- Note : la leçon 0.1 a été présentée trop tôt. On la reprendra après le Module A.
 
 ## Leçons validées
 | Leçon | Date | Résultat | Remarques |

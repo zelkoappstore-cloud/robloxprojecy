@@ -2,6 +2,28 @@
 
 Chaque ligne est une leçon. ✱ = exercice d'architecture (sans IA) ou jalon du projet lolpanel v2.
 
+## Module A : Apprendre à coder (point de départ)
+Tout se fait à la main, sans IA. L'IA ne sert qu'à expliquer.
+- A.1 C'est quoi du code ? Lancer du JavaScript (console du navigateur, puis Node)
+- A.2 Variables et types : texte, nombres, vrai/faux
+- A.3 Conditions : `if`, `else`, comparaisons
+- A.4 Fonctions : paramètres, `return`
+- A.5 Tableaux et boucles
+- A.6 Objets
+- A.7 `map`, `filter`, `find` : transformer des listes
+- A.8 Lire une erreur et déboguer (`console.log`, messages d'erreur)
+- A.9 HTML : la structure d'une page
+- A.10 CSS : le style, flexbox
+- A.11 JavaScript dans la page : le DOM et les événements (clic, saisie)
+- ✱ Mini-projet A1 : une todo-list en HTML/CSS/JS pur
+- A.12 Le terminal, npm, la structure d'un projet
+- A.13 Asynchrone : `fetch`, `async`/`await`, appeler une API
+- A.14 TypeScript : ajouter des types
+- A.15 React : composants et props
+- A.16 React : état (`useState`) et événements
+- A.17 Lire du code généré par l'IA et l'expliquer ligne par ligne
+- ✱ Mini-projet A2 : refaire une version simple de lolpanel (glisser des blocs, générer du HTML) avec React, presque sans IA
+
 ## Module 0 : Les modèles mentaux
 - 0.1 La frontière de confiance : le client propose, le serveur décide
 - 0.2 Le cycle de vie d'une requête (DNS, TLS, HTTP, réponse)
