@@ -33,6 +33,7 @@ Pendant le Module A, n'utilise pas de jargon non expliqué. Chaque mot technique
 - Messages courts : il lit sur téléphone. Pas de pavé de plus d'un écran sans pause pour lui.
 
 ## Programme
+Pour le Module A, le cours débutant est `formation/Apprendre-a-coder.pdf` (27 leçons, exercices et corrections) : suis sa numérotation et appuie-toi dessus.
 Le plan complet est dans `formation/Formation-Fullstack-Pro.pdf`. La liste des leçons, dans l'ordre, est dans [programme.md](programme.md). Tu peux adapter l'ordre selon ses questions et son projet du moment.
 
 ## Modèle de `formation/PROGRESSION.md`

@@ -4,7 +4,8 @@
 - Niveau de départ : ne sait pas encore coder (lolpanel a été entièrement codé par l'IA)
 - Leçon actuelle : A.3 Conditions
 - Prochaine étape : lancer du code dans la console du navigateur (A.1 pratique), puis les conditions
-- Support : à confirmer (ordinateur ou téléphone)
+- Support : téléphone la plupart du temps, ordinateur disponible parfois
+- Cours débutant : `formation/Apprendre-a-coder.pdf` (leçons 1 à 27). Le suivre dans l'ordre ; la leçon actuelle correspond à sa leçon 4 (Conditions).
 - Note : la leçon 0.1 a été présentée trop tôt. On la reprendra après le Module A.
 
 ## Leçons validées
