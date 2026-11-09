@@ -9,18 +9,17 @@
   body { font-family:"Inter",sans-serif; color:#fff; }
   .stage { position:relative; width:1080px; height:1080px; overflow:hidden;
     background:
-      radial-gradient(900px 700px at 100% 0%, #2f5bff 0%, transparent 60%),
-      radial-gradient(800px 800px at 0% 100%, #8b3dff 0%, transparent 60%),
-      linear-gradient(135deg, #5b2ee6 0%, #2a3bf0 50%, #140c5c 100%);
+      radial-gradient(900px 700px at 100% 100%, #0fb8ff 0%, transparent 55%),
+      radial-gradient(800px 800px at 0% 0%, #b44bff 0%, transparent 60%),
+      linear-gradient(135deg, #7a35f5 0%, #4b2bf0 45%, #1d2fd8 75%, #0a6fd6 100%);
   }
-  .glow { position:absolute; width:700px; height:700px; border-radius:50%; filter:blur(120px); opacity:.45; background:#4f8cff; left:500px; top:-200px; animation:drift 17s linear both; }
+  .glow { position:absolute; width:700px; height:700px; border-radius:50%; filter:blur(120px); opacity:.35; background:#00d4ff; left:500px; top:-200px; animation:drift 17s linear both; }
   @keyframes drift { from { transform:translate(0,0); } to { transform:translate(-300px,300px); } }
 
   /* Logo */
   .logo { position:absolute; left:80px; top:72px; display:flex; align-items:center; gap:18px; z-index:10; }
-  .mark { width:64px; height:64px; border-radius:16px; background:#fff; display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
-  .mark i { border-radius:4px; background:#5b2ee6; }
-  .mark i:nth-child(2) { background:#2f8cff; } .mark i:nth-child(3) { background:#8b3dff; } .mark i:nth-child(4) { background:#22c55e; }
+  .mark { width:64px; height:64px; filter:drop-shadow(0 0 18px rgba(120,80,255,.7)) drop-shadow(0 8px 20px rgba(0,0,0,.3)); }
+  .mark svg { width:100%; height:100%; display:block; }
   .word { font-family:"Inter Display","Inter"; font-weight:700; font-size:54px; letter-spacing:-0.02em; }
   .counter { position:absolute; right:72px; top:82px; z-index:10; background:rgba(10,8,50,.75); border-radius:24px; font-weight:600; font-size:26px; padding:8px 18px; }
   .counter span { position:absolute; left:18px; top:8px; opacity:0; }
@@ -95,8 +94,7 @@
 
   /* Final */
   .big { position:absolute; left:0; right:0; top:330px; text-align:center; }
-  .big .mark { width:150px; height:150px; border-radius:36px; gap:12px; padding:28px; margin:0 auto 34px; }
-  .big .mark i { border-radius:8px; }
+  .big .mark { width:170px; height:170px; margin:0 auto 34px; filter:drop-shadow(0 0 40px rgba(110,80,255,.9)) drop-shadow(0 0 70px rgba(0,229,255,.35)); }
   .big h1 { font-family:"Inter Display","Inter"; font-weight:900; font-size:96px; letter-spacing:-0.03em; }
   .big p { font-size:40px; font-weight:500; opacity:.9; margin-top:10px; }
   .url { display:inline-block; margin-top:46px; background:#fff; color:#3b1fc0; font-weight:800; font-size:38px; padding:20px 40px; border-radius:60px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
@@ -116,7 +114,7 @@
 <div class="stage">
   <div class="glow"></div>
 
-  <div class="logo"><div class="mark"><i></i><i></i><i></i><i></i></div><div class="word">lolpanel</div></div>
+  <div class="logo"><div class="mark"><svg viewBox="0 0 100 100"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c84bff"/><stop offset=".5" stop-color="#6a2bff"/><stop offset="1" stop-color="#00e5ff"/></linearGradient></defs><rect width="100" height="100" rx="27" fill="url(#lg1)"/><path d="M31 25 V70 H71" fill="none" stroke="#fff" stroke-width="14.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="word">lolpanel</div></div>
   <div class="counter"><b>5/5</b>
     <span class="cnt" style="--s:0s;--d:3.6s">1/5</span>
     <span class="cnt" style="--s:3.6s;--d:3.6s">2/5</span>
@@ -216,7 +214,7 @@
   <!-- SCENE 5 : end -->
   <section class="scene last" style="--s:14.2s;--d:3.8s">
     <div class="big">
-      <div class="mark pop" style="--s:14.3s"><i></i><i></i><i></i><i></i></div>
+      <div class="mark pop" style="--s:14.3s"><svg viewBox="0 0 100 100"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c84bff"/><stop offset=".5" stop-color="#6a2bff"/><stop offset="1" stop-color="#00e5ff"/></linearGradient></defs><rect width="100" height="100" rx="27" fill="url(#lg2)"/><path d="M31 25 V70 H71" fill="none" stroke="#fff" stroke-width="14.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <h1 class="pop" style="--s:14.5s">lolpanel</h1>
       <p class="pop" style="--s:14.7s">Build the UI. Get the code.</p>
       <div class="url pop" style="--s:15.0s">lolpanel.vercel.app</div>
