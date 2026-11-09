@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lolpanel ad</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1080px; height:1080px; overflow:hidden; background:#120a3a; }
+  body { font-family:"Inter",sans-serif; color:#fff; }
+  .stage { position:relative; width:1080px; height:1080px; overflow:hidden;
+    background:
+      radial-gradient(900px 700px at 100% 0%, #2f5bff 0%, transparent 60%),
+      radial-gradient(800px 800px at 0% 100%, #8b3dff 0%, transparent 60%),
+      linear-gradient(135deg, #5b2ee6 0%, #2a3bf0 50%, #140c5c 100%);
+  }
+  .glow { position:absolute; width:700px; height:700px; border-radius:50%; filter:blur(120px); opacity:.45; background:#4f8cff; left:500px; top:-200px; animation:drift 17s linear both; }
+  @keyframes drift { from { transform:translate(0,0); } to { transform:translate(-300px,300px); } }
+
+  /* Logo */
+  .logo { position:absolute; left:80px; top:72px; display:flex; align-items:center; gap:18px; z-index:10; }
+  .mark { width:64px; height:64px; border-radius:16px; background:#fff; display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  .mark i { border-radius:4px; background:#5b2ee6; }
+  .mark i:nth-child(2) { background:#2f8cff; } .mark i:nth-child(3) { background:#8b3dff; } .mark i:nth-child(4) { background:#22c55e; }
+  .word { font-family:"Inter Display","Inter"; font-weight:700; font-size:54px; letter-spacing:-0.02em; }
+  .counter { position:absolute; right:72px; top:82px; z-index:10; background:rgba(10,8,50,.75); border-radius:24px; font-weight:600; font-size:26px; padding:8px 18px; }
+  .counter span { position:absolute; left:18px; top:8px; opacity:0; }
+  .counter b { visibility:hidden; font-weight:600; }
+
+  /* Scenes */
+  .scene { position:absolute; inset:0; opacity:0; animation:scene var(--d) ease both; animation-delay:var(--s); }
+  .scene.last { animation-name:sceneLast; }
+  @keyframes scene { 0% { opacity:0; transform:translateX(60px); } 8% { opacity:1; transform:none; } 92% { opacity:1; transform:none; } 100% { opacity:0; transform:translateX(-60px); } }
+  @keyframes sceneLast { 0% { opacity:0; transform:scale(.96); } 12% { opacity:1; transform:none; } 100% { opacity:1; transform:none; } }
+
+  .q { position:absolute; left:80px; top:220px; font-size:46px; font-weight:500; letter-spacing:-0.01em; }
+  .a { position:absolute; left:80px; top:282px; font-family:"Inter Display","Inter"; font-weight:900; font-size:78px; letter-spacing:-0.02em; line-height:1.02; }
+  .pop { opacity:0; animation:pop .6s cubic-bezier(.2,1.4,.4,1) both; animation-delay:var(--s); }
+  @keyframes pop { from { opacity:0; transform:translateY(24px) scale(.96); } to { opacity:1; transform:none; } }
+  .fade { opacity:0; animation:fade .5s ease both; animation-delay:var(--s); }
+  @keyframes fade { from { opacity:0; } to { opacity:1; } }
+
+  /* Mock window */
+  .win { position:absolute; background:#eef0fb; border-radius:18px; color:#1b1d3a; box-shadow:0 40px 80px rgba(8,4,60,.45); overflow:hidden; }
+  .bar { height:46px; display:flex; align-items:center; gap:10px; padding:0 18px; background:#fff; border-bottom:1px solid #dfe2f3; font-size:17px; font-weight:600; color:#3b3f6b; }
+  .bar .dots { display:flex; gap:7px; margin-right:6px; } .bar .dots i { width:12px; height:12px; border-radius:50%; background:#d6d9ee; }
+  .bar small { color:#7b80a8; font-weight:500; }
+  .side { position:absolute; left:0; top:46px; bottom:0; width:190px; background:#fff; border-right:1px solid #dfe2f3; padding:16px 14px; }
+  .side h6 { font-size:13px; letter-spacing:.08em; color:#8a8fb5; margin-bottom:12px; }
+  .comp { display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px; background:#f3f4fd; margin-bottom:10px; font-size:16px; font-weight:600; color:#3b3f6b; }
+  .comp i { width:20px; height:20px; border-radius:6px; background:#5b2ee6; opacity:.85; }
+  .canvas { position:absolute; left:210px; right:210px; top:66px; bottom:20px; background:#fff; border-radius:12px; border:2px dashed #cfd3f0; padding:22px; }
+  .props { position:absolute; right:0; top:46px; bottom:0; width:190px; background:#fff; border-left:1px solid #dfe2f3; padding:16px 14px; }
+  .prop { height:12px; border-radius:6px; background:#e3e6f7; margin:12px 0; }
+  .prop.s { width:60%; } .swatch { display:flex; gap:8px; margin-top:16px; } .swatch i { width:28px; height:28px; border-radius:8px; }
+
+  .blk { border-radius:10px; margin-bottom:14px; }
+  .b-nav { height:40px; background:#1b1d3a; display:flex; align-items:center; padding:0 14px; gap:10px; }
+  .b-nav i { width:60px; height:8px; border-radius:4px; background:#fff; opacity:.8; } .b-nav i:first-child { width:30px; background:#8b3dff; opacity:1; }
+  .b-hero { height:120px; background:linear-gradient(135deg,#5b2ee6,#2f8cff); padding:20px; }
+  .b-hero i { display:block; height:16px; width:70%; border-radius:6px; background:#fff; margin-bottom:12px; } .b-hero i + i { width:45%; height:10px; opacity:.8; }
+  .b-btn { width:150px; height:42px; background:#22c55e; display:grid; place-items:center; color:#fff; font-weight:700; font-size:16px; }
+  .b-cards { display:flex; gap:12px; } .b-cards i { flex:1; height:70px; border-radius:10px; background:#eef0fb; border:1px solid #dfe2f3; }
+
+  .cursor { position:absolute; width:34px; height:34px; z-index:5; opacity:0; animation:cur 1.5s ease-in-out both; animation-delay:var(--s); }
+  @keyframes cur { 0% { opacity:0; transform:translate(0,0); } 10% { opacity:1; transform:translate(0,0); } 80% { opacity:1; transform:translate(var(--x),var(--y)); } 100% { opacity:0; transform:translate(var(--x),var(--y)); } }
+  .ghost { position:absolute; width:150px; height:42px; border-radius:10px; background:#22c55e; opacity:0; animation:ghost 1.5s ease-in-out both; animation-delay:var(--s); color:#fff; font-weight:700; display:grid; place-items:center; font-size:16px; z-index:4; box-shadow:0 12px 30px rgba(0,0,0,.25); }
+  @keyframes ghost { 0% { opacity:0; transform:translate(0,0); } 10% { opacity:.95; transform:translate(0,0) rotate(-3deg); } 80% { opacity:.95; transform:translate(var(--x),var(--y)) rotate(2deg); } 100% { opacity:0; transform:translate(var(--x),var(--y)); } }
+
+  /* Code */
+  .code { background:#0f1130; color:#e2e6ff; font-family:"DejaVu Sans Mono",monospace; font-size:19px; line-height:1.75; }
+  .code .bar { background:#171a45; border-color:#262a5e; color:#cfd3ff; }
+  .tab { padding:6px 12px; border-radius:8px; background:#5b2ee6; color:#fff; font-size:15px; }
+  .tab.off { background:transparent; color:#8a8fc5; }
+  .ln { white-space:pre; overflow:hidden; width:0; animation:type .5s steps(30) both; animation-delay:var(--s); }
+  @keyframes type { to { width:100%; } }
+  .k { color:#c084fc; } .t { color:#60a5fa; } .s { color:#86efac; } .p { color:#fbbf24; } .m { color:#6b7099; }
+  .copy { position:absolute; right:18px; bottom:18px; background:#22c55e; color:#fff; font-family:"Inter"; font-weight:700; font-size:18px; padding:12px 20px; border-radius:12px; }
+
+  .arrow { position:absolute; width:90px; height:90px; border-radius:50%; background:#fff; color:#5b2ee6; display:grid; place-items:center; font-size:46px; font-weight:800; box-shadow:0 20px 40px rgba(0,0,0,.3); z-index:3; }
+
+  /* Check */
+  .ring { position:absolute; width:260px; height:260px; border-radius:50%; background:radial-gradient(circle,#4ade80 0%,#22c55e 55%,rgba(34,197,94,.25) 56%,rgba(34,197,94,.25) 70%,transparent 71%); display:grid; place-items:center; }
+  .ring div { text-align:center; font-weight:800; font-size:18px; letter-spacing:.05em; color:#fff; margin-top:40px; }
+  .ring svg { position:absolute; top:62px; }
+  .card { position:absolute; background:#fff; color:#1b1d3a; border-radius:16px; padding:20px 22px; box-shadow:0 30px 60px rgba(8,4,60,.4); }
+  .card h5 { font-size:19px; color:#5b2ee6; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .row { display:flex; justify-content:space-between; font-size:16px; color:#5b5f86; margin:7px 0; gap:24px; } .row b { color:#1b1d3a; }
+  .btn { margin-top:14px; background:#5b2ee6; color:#fff; text-align:center; border-radius:8px; padding:9px; font-weight:700; font-size:15px; }
+
+  /* Grid */
+  .grid { position:absolute; left:80px; right:80px; top:250px; display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  .tile { background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.18); border-radius:14px; padding:26px 0; text-align:center; font-family:"Inter Display","Inter"; font-weight:800; font-size:40px; }
+  .tile.wide { grid-column:span 2; font-size:50px; background:rgba(255,255,255,.2); }
+  .cta { position:absolute; left:80px; bottom:110px; font-size:36px; font-weight:800; display:flex; align-items:center; gap:14px; }
+
+  /* Final */
+  .big { position:absolute; left:0; right:0; top:330px; text-align:center; }
+  .big .mark { width:150px; height:150px; border-radius:36px; gap:12px; padding:28px; margin:0 auto 34px; }
+  .big .mark i { border-radius:8px; }
+  .big h1 { font-family:"Inter Display","Inter"; font-weight:900; font-size:96px; letter-spacing:-0.03em; }
+  .big p { font-size:40px; font-weight:500; opacity:.9; margin-top:10px; }
+  .url { display:inline-block; margin-top:46px; background:#fff; color:#3b1fc0; font-weight:800; font-size:38px; padding:20px 40px; border-radius:60px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+
+  /* Progress dots */
+  .prog { position:absolute; left:50%; bottom:46px; transform:translateX(-50%); display:flex; gap:18px; background:rgba(10,8,50,.75); padding:13px 22px; border-radius:30px; z-index:10; }
+  .prog i { width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,.4); position:relative; }
+  .prog i::after { content:""; position:absolute; inset:0; border-radius:50%; background:#fff; opacity:0; animation:dot var(--d) linear both; animation-delay:var(--s); }
+  .prog i.last::after { animation-name:dotLast; }
+  @keyframes dot { 0%,100% { opacity:0; } 3%,97% { opacity:1; } }
+  @keyframes dotLast { 0% { opacity:0; } 3%,100% { opacity:1; } }
+  .cnt { animation:dot var(--d) linear both; animation-delay:var(--s); }
+  .cnt.last { animation-name:dotLast; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="glow"></div>
+
+  <div class="logo"><div class="mark"><i></i><i></i><i></i><i></i></div><div class="word">lolpanel</div></div>
+  <div class="counter"><b>5/5</b>
+    <span class="cnt" style="--s:0s;--d:3.6s">1/5</span>
+    <span class="cnt" style="--s:3.6s;--d:3.6s">2/5</span>
+    <span class="cnt" style="--s:7.2s;--d:3.6s">3/5</span>
+    <span class="cnt" style="--s:10.8s;--d:3.4s">4/5</span>
+    <span class="cnt last" style="--s:14.2s;--d:3.8s">5/5</span>
+  </div>
+
+  <!-- SCENE 1 : build UI -->
+  <section class="scene" style="--s:0s;--d:3.6s">
+    <div class="q pop" style="--s:.15s">Need to build a UI fast?</div>
+    <div class="a pop" style="--s:.4s">JUST DRAG &amp; DROP.</div>
+    <div class="win fade" style="--s:.5s;left:80px;right:80px;top:420px;height:520px">
+      <div class="bar"><span class="dots"><i></i><i></i><i></i></span>lolpanel <small>· UI Builder</small></div>
+      <div class="side"><h6>COMPONENTS</h6>
+        <div class="comp"><i></i>Navbar</div><div class="comp"><i style="background:#2f8cff"></i>Hero</div>
+        <div class="comp"><i style="background:#22c55e"></i>Button</div><div class="comp"><i style="background:#8b3dff"></i>Cards</div>
+      </div>
+      <div class="canvas">
+        <div class="blk b-nav pop" style="--s:.8s"><i></i><i></i><i></i></div>
+        <div class="blk b-hero pop" style="--s:1.1s"><i></i><i></i></div>
+        <div class="blk b-cards pop" style="--s:1.4s"><i></i><i></i><i></i></div>
+        <div class="blk b-btn pop" style="--s:3.0s">Get started</div>
+      </div>
+      <div class="props"><h6 style="font-size:13px;letter-spacing:.08em;color:#8a8fb5">PROPERTIES</h6>
+        <div class="prop"></div><div class="prop s"></div><div class="prop"></div><div class="prop s"></div>
+        <div class="swatch"><i style="background:#5b2ee6"></i><i style="background:#2f8cff"></i><i style="background:#22c55e"></i></div>
+      </div>
+    </div>
+    <div class="ghost" style="--s:1.6s;--x:270px;--y:202px;left:100px;top:612px">Get started</div>
+    <svg class="cursor" style="--s:1.6s;--x:270px;--y:202px;left:190px;top:640px" viewBox="0 0 24 24"><path d="M4 2l16 10-7 1.5L9.5 21z" fill="#fff" stroke="#1b1d3a" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  </section>
+
+  <!-- SCENE 2 : code -->
+  <section class="scene" style="--s:3.6s;--d:3.6s">
+    <div class="q pop" style="--s:3.75s">Want real code from your design?</div>
+    <div class="a pop" style="--s:4.0s">ONE CLICK.</div>
+    <div class="win fade" style="--s:4.1s;left:80px;top:440px;width:330px;height:460px;padding:18px">
+      <div class="blk b-nav" style="height:32px"><i></i><i></i></div>
+      <div class="blk b-hero" style="height:110px"><i></i><i></i></div>
+      <div class="blk b-cards"><i style="height:60px"></i><i style="height:60px"></i></div>
+      <div class="blk b-btn" style="width:130px;height:38px;font-size:14px">Get started</div>
+    </div>
+    <div class="arrow pop" style="--s:4.4s;left:372px;top:625px">→</div>
+    <div class="win code fade" style="--s:4.5s;left:440px;right:80px;top:410px;height:520px">
+      <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="tab">Code</span><span class="tab off">App.jsx</span></div>
+      <div style="padding:18px 22px">
+        <div class="ln" style="--s:4.7s"><span class="k">export default</span> <span class="k">function</span> <span class="p">App</span>() {</div>
+        <div class="ln" style="--s:4.95s">  <span class="k">return</span> (</div>
+        <div class="ln" style="--s:5.2s">    &lt;<span class="t">nav</span> <span class="p">className</span>=<span class="s">"navbar"</span> /&gt;</div>
+        <div class="ln" style="--s:5.45s">    &lt;<span class="t">section</span> <span class="p">className</span>=<span class="s">"hero"</span>&gt;</div>
+        <div class="ln" style="--s:5.7s">      &lt;<span class="t">h1</span>&gt;Build faster&lt;/<span class="t">h1</span>&gt;</div>
+        <div class="ln" style="--s:5.95s">    &lt;/<span class="t">section</span>&gt;</div>
+        <div class="ln" style="--s:6.2s">    &lt;<span class="t">button</span>&gt;Get started&lt;/<span class="t">button</span>&gt;</div>
+        <div class="ln" style="--s:6.45s">  );</div>
+        <div class="ln" style="--s:6.6s">}</div>
+      </div>
+      <div class="copy pop" style="--s:6.6s">✓ Copied</div>
+    </div>
+  </section>
+
+  <!-- SCENE 3 : features -->
+  <section class="scene" style="--s:7.2s;--d:3.6s">
+    <div class="q pop" style="--s:7.35s;top:200px">From idea to interface</div>
+    <div class="a pop" style="--s:7.55s;top:262px;font-size:68px">DESIGN VISUALLY.<br>PREVIEW LIVE.<br>EXPORT CODE.</div>
+    <div class="win fade" style="--s:7.8s;left:150px;right:150px;top:540px;height:400px">
+      <div class="bar"><span class="dots"><i></i><i></i><i></i></span>lolpanel <small>· Export</small></div>
+    </div>
+    <div class="ring pop" style="--s:8.1s;left:410px;top:610px">
+      <svg width="90" height="90" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>CODE READY</div>
+    </div>
+    <div class="card pop" style="--s:8.4s;left:110px;top:690px;width:290px">
+      <h5>● Components</h5>
+      <div class="row">Navbar <b>✓</b></div><div class="row">Hero <b>✓</b></div><div class="row">Button <b>✓</b></div>
+    </div>
+    <div class="card pop" style="--s:8.7s;right:110px;top:640px;width:290px">
+      <h5>● Export</h5>
+      <div class="row">Format <b>Code</b></div><div class="row">Status <b style="color:#22c55e">Ready</b></div>
+      <div class="btn">Copy code</div>
+    </div>
+  </section>
+
+  <!-- SCENE 4 : grid -->
+  <section class="scene" style="--s:10.8s;--d:3.4s">
+    <div class="grid">
+      <div class="tile wide pop" style="--s:10.95s">All-in-one UI Builder</div>
+      <div class="tile pop" style="--s:11.1s">Drag &amp; Drop</div>
+      <div class="tile pop" style="--s:11.2s">Live Preview</div>
+      <div class="tile wide pop" style="--s:11.3s">Code Conversion</div>
+      <div class="tile pop" style="--s:11.4s">Components</div>
+      <div class="tile pop" style="--s:11.5s">Clean Export</div>
+    </div>
+    <div class="cta pop" style="--s:11.8s">Try it now <span>→</span></div>
+  </section>
+
+  <!-- SCENE 5 : end -->
+  <section class="scene last" style="--s:14.2s;--d:3.8s">
+    <div class="big">
+      <div class="mark pop" style="--s:14.3s"><i></i><i></i><i></i><i></i></div>
+      <h1 class="pop" style="--s:14.5s">lolpanel</h1>
+      <p class="pop" style="--s:14.7s">Build the UI. Get the code.</p>
+      <div class="url pop" style="--s:15.0s">lolpanel.vercel.app</div>
+    </div>
+  </section>
+
+  <div class="prog">
+    <i style="--s:0s;--d:3.6s"></i><i style="--s:3.6s;--d:3.6s"></i><i style="--s:7.2s;--d:3.6s"></i><i style="--s:10.8s;--d:3.4s"></i><i class="last" style="--s:14.2s;--d:3.8s"></i>
+  </div>
+</div>
+</body>
+</html>
