@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BraveCrawl</title>
+<meta name="description" content="Une araignée-robot qui lit tes PDF, EPUB et documents, et s'entraîne à y trouver l'information que tu cherches.">
+<meta name="theme-color" content="#07090b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307090b'/%3E%3Cg stroke='%23bfeadb' stroke-width='1.6' fill='none'%3E%3Cpath d='M13 10 6 4M13 15 3 13M13 20 5 27M19 10l7-6M19 15l10-2M19 20l8 7'/%3E%3C/g%3E%3Crect x='12.5' y='7' width='7' height='17' rx='1.5' fill='%230b1216' stroke='%23eef3f6' stroke-width='1.4'/%3E%3Ccircle cx='16' cy='20' r='2' fill='%233b8fe6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Deux zones : la page du document où l'araignée cherche, et un panneau de contrôle (à droite, ou en bas sur téléphone) */
+:root {
+  --bg: #07090b;
+  --ink: #9aa3ac;
+  --ink-dim: #3a4249;
+  --box: #eef3f6;
+  --hit: #4fd6e3;
+  --ok: #7ef0a0;
+  --bad: #ec4d68;
+  --panel: #0d1215;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--bg); }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; overflow: hidden; }
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 330px; height: 100%; }
+#stage { position: relative; overflow: hidden; min-width: 0; }
+#stage.drop::after { content: "Lâche le fichier ici"; position: absolute; inset: 12px; border: 2px dashed var(--hit); border-radius: 12px; display: grid; place-items: center; color: var(--hit); font-family: var(--mono); background: rgba(7, 9, 11, 0.8); z-index: 3; }
+#doc {
+  position: absolute; inset: 0; max-width: 900px; margin: 0 auto;
+  padding-block: 56px 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: 16px;
+  font-size: 18px; line-height: 2.1; user-select: none; overflow-wrap: anywhere;
+}
+#doc .tag { font-family: var(--mono); font-size: 0.72em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+#doc p { margin: 0 0 0.8em; }
+table { width: 100%; border-collapse: collapse; margin-top: 1em; font-family: var(--mono); font-size: 0.88em; font-variant-numeric: tabular-nums; }
+th, td { border-top: 1px solid var(--ink-dim); padding: 0.15em 0.4em; text-align: right; font-weight: 400; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-dim); }
+.w {
+  border-radius: 3px; outline: 1.5px solid transparent; outline-offset: 2px;
+  background-color: rgba(79, 214, 227, calc(var(--v, 0) * 0.34));
+  transition: outline-color 0.5s, background-color 0.4s, color 0.3s;
+}
+.w.seen { outline-color: rgba(238, 243, 246, 0.25); }
+.w.grab { outline-color: var(--box); color: var(--box); transition-duration: 0.1s; }
+.w.hit { background-color: rgba(79, 214, 227, 0.6); color: #fff; }
+.w.ans { outline-color: var(--ok); background-color: rgba(126, 240, 160, 0.35); color: #fff; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+#hud {
+  background: var(--panel); border-left: 1px solid var(--ink-dim); overflow-y: auto;
+  padding-block: 20px;
+  padding-left: 18px; padding-right: max(18px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 18px; font-size: 13px;
+}
+#hud h1 { margin: 0; font-family: var(--mono); font-size: 15px; font-weight: 500; letter-spacing: 0.06em; color: var(--box); }
+#hud h1 span { color: var(--hit); }
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+.group { display: grid; gap: 8px; }
+form { display: flex; gap: 6px; }
+input, button, .btn { font: inherit; color: var(--box); background: var(--bg); border: 1px solid var(--ink-dim); border-radius: 6px; }
+input { flex: 1; min-width: 0; padding: 7px 10px; }
+button, .btn { padding: 6px 10px; cursor: pointer; transition: border-color 0.15s, background-color 0.15s; display: inline-flex; align-items: center; }
+button:hover, .btn:hover { border-color: var(--ink); }
+button:disabled { opacity: 0.4; cursor: default; }
+button:focus-visible, input:focus-visible, .btn:focus-within { outline: 2px solid var(--hit); outline-offset: 1px; }
+.primary { background: var(--hit); border-color: var(--hit); color: var(--bg); font-weight: 500; }
+.primary:hover { border-color: var(--box); }
+button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font-size: 12px; padding: 4px 8px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-family: var(--mono); }
+.stats div { display: grid; gap: 2px; }
+.stats b { font-size: 18px; font-weight: 500; color: var(--box); font-variant-numeric: tabular-nums; }
+#spark { width: 100%; height: 48px; display: block; }
+.answer { border: 1px solid var(--ink-dim); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; }
+.answer.found { border-color: var(--ok); }
+#ans { font-size: 20px; font-weight: 500; color: var(--box); line-height: 1.35; }
+#ans.long { font-size: 14px; font-weight: 400; }
+.answer.found #ans { color: var(--ok); }
+#src { color: var(--ink); font-size: 12px; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pager { justify-content: space-between; font-family: var(--mono); font-size: 12px; }
+.think { margin: 0; color: var(--box); font-size: 14px; line-height: 1.45; min-height: 2.9em; }
+.note { color: var(--ink-dim); font-size: 12px; line-height: 1.5; margin: 0; }
+
+@media (max-width: 760px) {
+  #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  #doc { padding-block: 34px 8px; }
+  #hud { border-left: 0; border-top: 1px solid var(--ink-dim); max-height: 46vh; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .w { transition: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage" aria-label="Araignée qui cherche une information dans le document">
+    <div id="doc">
+      <p class="tag" data-w>Résumé · rapport financier 2026 · document fictif</p>
+      <p data-w>Au premier semestre de l'exercice 2026, le chiffre d'affaires a progressé de <span id="a-croiss">14 %</span> grâce à la hausse des contrats de location de centres de données. Les garanties accordées aux partenaires couvrent le risque de défaut sur une durée de <span id="a-duree">trois à cinq ans.</span></p>
+      <p data-w>Les revenus locatifs sont comptabilisés de manière linéaire sur la durée du bail. Les actions des sociétés cotées détenues en portefeuille sont évaluées à leur juste valeur, et les variations sont reconnues en autres produits.</p>
+      <p data-w>Les charges d'exploitation restent stables. La trésorerie disponible au 30 juin 2026 permet de financer les investissements prévus sans nouvel emprunt.</p>
+      <table>
+        <tr><th data-w>(en millions)</th><th data-w>30 juin 2026</th><th data-w>31 déc. 2025</th></tr>
+        <tr><td data-w>Revenus locatifs</td><td data-w>2&#8239;162</td><td data-w>1&#8239;948</td></tr>
+        <tr><td data-w>Garanties accordées</td><td data-w>2&#8239;262</td><td data-w>2&#8239;105</td></tr>
+        <tr><td data-w>Trésorerie disponible</td><td data-w id="a-treso">4&#8239;870</td><td data-w>4&#8239;312</td></tr>
+        <tr><td data-w>Total des actifs</td><td data-w>18&#8239;405</td><td data-w id="a-actifs25">16&#8239;990</td></tr>
+      </table>
+    </div>
+    <canvas id="cv"></canvas>
+  </div>
+
+  <aside id="hud">
+    <h1>Brave<span>Crawl</span></h1>
+
+    <div class="group">
+      <span class="label">Document</span>
+      <div class="row">
+        <label class="btn primary" for="file">Donner un fichier</label>
+        <input type="file" id="file" accept=".pdf,.epub,.docx,.odt,.txt,.md,.markdown,.html,.htm,.xhtml,.rtf,.csv,.json" hidden>
+        <button type="button" id="demo">Exemple</button>
+      </div>
+      <p class="note" id="docinfo">Exemple : résumé d’un rapport fictif. Donne-lui ton fichier (PDF, EPUB, DOCX, ODT, TXT, MD, HTML, RTF, CSV) ou glisse-le sur la page. Il reste sur ton appareil.</p>
+      <div class="row pager" id="pager" hidden>
+        <button type="button" id="prev" aria-label="Page précédente">◀</button>
+        <span id="pageinfo">Page 1 / 1</span>
+        <button type="button" id="next" aria-label="Page suivante">▶</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="label">Ce qu'elle doit trouver</span>
+      <div class="chips" id="presets"></div>
+      <form id="qf">
+        <input id="q" placeholder="Pose ta question, ex. trésorerie" autocomplete="off" enterkeyhint="search">
+        <button class="primary" type="submit">Chercher</button>
+      </form>
+      <div class="chips" id="hits"></div>
+    </div>
+
+    <div class="answer" id="answerBox">
+      <span class="label">Réponse extraite</span>
+      <span id="ans">…</span>
+      <span id="src">Elle cherche encore.</span>
+    </div>
+
+    <div class="group">
+      <span class="label">Elle pense</span>
+      <p class="think" id="think">Je regarde autour de moi.</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Entraînement</span>
+      <div class="stats">
+        <div><span class="label">Essai</span><b id="ep">0</b></div>
+        <div><span class="label">Dernier</span><b id="last">–</b></div>
+        <div><span class="label">Record</span><b id="best">–</b></div>
+      </div>
+      <canvas id="spark" aria-label="Nombre de pas par essai"></canvas>
+      <p class="note" id="explore">Exploration 30 %</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Vitesse</span>
+      <div class="row" id="speeds">
+        <button type="button" data-s="1" aria-pressed="true">×1</button>
+        <button type="button" data-s="5" aria-pressed="false">×5</button>
+        <button type="button" data-s="20" aria-pressed="false">×20</button>
+        <button type="button" id="reset">Tout oublier</button>
+      </div>
+      <p class="note">Son cerveau : elle lit les mots autour d’elle (flair), regarde un coup plus loin, retient les chemins qui marchent (en cyan), se souvient où était l’info et aime visiter des mots nouveaux. Elle comprend aussi les fautes de frappe et quelques synonymes.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), doc = $('doc'), cv = $('cv'), ctx = cv.getContext('2d');
+  const spark = $('spark'), sctx = spark.getContext('2d');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DEMO_HTML = doc.innerHTML;
+
+  const C = { leg: '#bfeadb', joint: '#ec4d68', silk: '#ff2e93', body: '#0b1216', line: '#eef3f6', eye: '#3b8fe6', eyeRim: '#a8d4ff' };
+  const ANGLES = [-75, -42, -12, 22, 58];
+  const MAX_STEPS = 45, GAMMA = 0.88, ALPHA = 0.5;
+  const norm = s => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}%]/gu, '');
+
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  const fuzzy = (c, n) => c.length >= 3 && (n.includes(c) || (c.length >= 5 && lev(c, n) <= (c.length >= 8 ? 2 : 1)));
+  const SYNONYMS = { cash: 'tresorerie', argent: 'tresorerie', liquidites: 'tresorerie', dette: 'emprunt', pret: 'emprunt', credit: 'emprunt', loyer: 'locatifs', loyers: 'locatifs', croissance: 'progresse', hausse: 'progresse', depenses: 'charges', couts: 'charges', bourse: 'cotees', contrat: 'contrats' };
+  const STOP = new Set('les des une est que qui dans pour par sur avec aux ces son ses leur leurs quel quelle quels quelles combien comment pourquoi quoi est quand elle ils elles nous vous mais donc car pas plus tout tous the and for with what how who when where which this that from are was'.split(' '));
+  const tokens = q => q.split(/[\s'’\-]+/).map(norm).filter(t => t.length >= 3 && !STOP.has(t)).map(t => SYNONYMS[t] || t);
+
+  // --- Mots de la page affichée ---
+  let words = [];
+  function buildWords() {
+    doc.querySelectorAll('[data-w]').forEach(root => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      for (const node of nodes) {
+        const frag = document.createDocumentFragment();
+        for (const p of node.textContent.split(/([ \n\t]+)/)) {
+          if (!p) continue;
+          if (/^[ \n\t]+$/.test(p)) { frag.append(p); continue; }
+          const s = document.createElement('span');
+          s.className = 'w'; s.textContent = p;
+          frag.append(s);
+        }
+        node.replaceWith(frag);
+      }
+    });
+    words = [...doc.querySelectorAll('.w')].map((el, i) => ({ el, i, text: el.textContent, n: norm(el.textContent), num: /\d/.test(el.textContent), x: 0, y: 0, vis: false }));
+    let g = 0, box = null;
+    for (const w of words) {
+      const tr = w.el.closest('tr'), b = tr || w.el.closest('p');
+      if (b !== box) { g++; box = b; }
+      w.g = g;
+      if (!tr && /[.!?]$/.test(w.text)) g++;
+    }
+  }
+
+  const PRESETS = [
+    { label: "Croissance du chiffre d'affaires", clues: ['chiffre', 'affaires', 'progresse'], id: 'a-croiss', text: '+14 %', src: 'Premier semestre 2026' },
+    { label: 'Durée des garanties', clues: ['garanties', 'duree'], id: 'a-duree', text: '3 à 5 ans', src: 'Garanties accordées aux partenaires' },
+    { label: 'Trésorerie au 30 juin', clues: ['tresorerie', 'disponible'], id: 'a-treso', text: '4 870 M', src: 'Trésorerie disponible · 30 juin 2026' },
+    { label: 'Total des actifs 2025', clues: ['total', 'actifs'], id: 'a-actifs25', text: '16 990 M', src: 'Total des actifs · 31 déc. 2025' }
+  ];
+  const memory = new Map();
+
+  // P = son flair : ce qu'elle devine en lisant (mot-indice, phrase qui en parle, nombre dans cette phrase)
+  function makeQuery(key, answerIdx, clues, extract, { numeric = false, readable = false } = {}) {
+    if (memory.has(key)) return memory.get(key);
+    const ans = new Set(answerIdx);
+    const clue = Uint8Array.from(words, w => !ans.has(w.i) && clues.some(c => fuzzy(c, w.n)) ? 1 : 0);
+    const hot = new Set(words.filter(w => clue[w.i] || (readable && ans.has(w.i))).map(w => w.g));
+    const q = {
+      key, answer: ans, extract, ep: 0, wins: 0, mem: null, hist: [], best: Infinity,
+      V: new Float32Array(words.length), N: new Uint16Array(words.length), clue,
+      P: Float32Array.from(words, w => readable && ans.has(w.i) ? 1 : clue[w.i] ? 0.6 : hot.has(w.g) ? 0.3 + (numeric && w.num ? 0.3 : 0) : 0)
+    };
+    memory.set(key, q);
+    return q;
+  }
+
+  function sentenceOf(w) {
+    const tr = w.el.closest('tr');
+    if (tr) return [...tr.cells].map(c => c.textContent.trim()).join(' · ');
+    const p = w.el.closest('p');
+    const s = ((p.textContent.match(/[^.!?]+[.!?]*/g) || []).find(x => x.includes(w.text)) || p.textContent).trim();
+    return s.length > 240 ? s.slice(0, 237) + '…' : s;
+  }
+
+  // --- Document chargé ---
+  let pages = null, pageNorms = [], pageIdx = 0, docName = '', lastQuery = '';
+  const baseFs = () => (W < 600 ? 13 : 15);
+
+  function paginate(paras) {
+    const fs = baseFs(), lh = fs < 15 ? 1.75 : 2.1;
+    const inner = Math.min(W, 900) - 32;
+    const lines = Math.max(4, Math.floor((H - 90) / (fs * lh)) - 1);
+    const cap = Math.max(30, Math.floor(lines * (inner / (fs * 0.5)) / 6.3 * 0.8));
+    const out = [];
+    let cur = [], n = 0;
+    for (const para of paras) {
+      const ws = para.split(/\s+/).filter(Boolean);
+      while (ws.length) {
+        const room = cap - n - (cur.length ? 3 : 0);
+        if (room < 6 && cur.length) { out.push(cur); cur = []; n = 0; continue; }
+        const take = ws.splice(0, Math.max(room, 6));
+        cur.push(take.join(' '));
+        n += take.length + 3;
+      }
+    }
+    if (cur.length) out.push(cur);
+    pageNorms = out.map(pg => pg.join(' ').split(/[\s'’\-]+/).map(norm).filter(Boolean));
+    return out;
+  }
+
+  function afterRender() {
+    buildWords();
+    memory.clear();
+    Q = null; state = 'idle'; S.target = null;
+    hits([]);
+    $('think').textContent = 'Je regarde autour de moi.';
+    setAnswer('…', pages ? 'Pose ta question.' : 'Elle cherche encore.', false);
+    if (!W) return;
+    fit(); measure(); placeLegs(); renderStats();
+  }
+
+  function renderPage(i) {
+    pageIdx = Math.max(0, Math.min(pages.length - 1, i));
+    doc.textContent = '';
+    const tag = document.createElement('p');
+    tag.className = 'tag'; tag.dataset.w = '';
+    tag.textContent = `${docName} · page ${pageIdx + 1}/${pages.length}`;
+    doc.append(tag);
+    for (const para of pages[pageIdx]) {
+      const p = document.createElement('p');
+      p.dataset.w = ''; p.textContent = para;
+      doc.append(p);
+    }
+    $('pageinfo').textContent = `Page ${pageIdx + 1} / ${pages.length}`;
+    $('prev').disabled = pageIdx === 0;
+    $('next').disabled = pageIdx === pages.length - 1;
+    afterRender();
+  }
+
+  function showDemo() {
+    pages = null; docName = ''; lastQuery = '';
+    doc.innerHTML = DEMO_HTML;
+    $('pager').hidden = true;
+    $('presets').hidden = false;
+    $('docinfo').textContent = 'Exemple : résumé d’un rapport fictif. Donne-lui ton fichier (PDF, EPUB, DOCX, ODT, TXT, MD, HTML, RTF, CSV) ou glisse-le sur la page. Il reste sur ton appareil.';
+    afterRender();
+    $('presets').querySelector('button').click();
+  }
+
+  // --- Lecture des fichiers (tout se passe dans le navigateur) ---
+  const loadScript = src => new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script');
+    s.src = src; s.onload = res;
+    s.onerror = () => rej(new Error('connexion impossible au lecteur de fichiers'));
+    document.head.append(s);
+  });
+  const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  const PDFW = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const JSZIP = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+
+  function linesToParas(lines) {
+    const out = [];
+    let cur = '';
+    for (const raw of lines) {
+      const l = raw.replace(/\s+/g, ' ').trim();
+      if (!l) { if (cur) out.push(cur); cur = ''; continue; }
+      cur = cur ? (cur.endsWith('-') ? cur.slice(0, -1) + l : cur + ' ' + l) : l;
+      if (/[.!?:»"]$/.test(l) && cur.length > 300) { out.push(cur); cur = ''; }
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  function htmlToParas(html) {
+    const d = new DOMParser().parseFromString(html, 'text/html');
+    d.querySelectorAll('script, style, noscript, nav').forEach(e => e.remove());
+    const blocks = [...d.body.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, td, th, dt, dd, figcaption')]
+      .filter(e => !e.querySelector('p, li, h1, h2, h3, h4, h5, h6, blockquote, td'));
+    const out = blocks.map(e => e.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    return out.length ? out : linesToParas((d.body.textContent || '').split('\n'));
+  }
+
+  async function readPdf(buf, progress) {
+    await loadScript(PDFJS);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFW;
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const paras = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      progress(`Lecture du PDF… page ${i} / ${pdf.numPages}`);
+      const tc = await (await pdf.getPage(i)).getTextContent();
+      const lines = [];
+      let line = '';
+      for (const it of tc.items) {
+        line += it.str;
+        if (it.hasEOL) { lines.push(line); line = ''; }
+      }
+      if (line) lines.push(line);
+      paras.push(...linesToParas(lines));
+    }
+    return paras;
+  }
+
+  const resolvePath = (base, href) => {
+    const out = [];
+    for (const p of (base + href.split('#')[0]).split('/')) { if (p === '..') out.pop(); else if (p && p !== '.') out.push(p); }
+    return out.join('/');
+  };
+
+  async function readEpub(buf, progress) {
+    await loadScript(JSZIP);
+    const zip = await JSZip.loadAsync(buf);
+    const xml = s => new DOMParser().parseFromString(s, 'application/xml');
+    const container = zip.file('META-INF/container.xml');
+    if (!container) throw new Error('EPUB invalide');
+    const opfPath = xml(await container.async('text')).getElementsByTagNameNS('*', 'rootfile')[0].getAttribute('full-path');
+    const opf = xml(await zip.file(opfPath).async('text'));
+    const base = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+    const items = {};
+    for (const it of opf.getElementsByTagNameNS('*', 'item')) items[it.getAttribute('id')] = it.getAttribute('href');
+    const spine = [...opf.getElementsByTagNameNS('*', 'itemref')].map(r => items[r.getAttribute('idref')]).filter(Boolean);
+    const paras = [];
+    let k = 0;
+    for (const href of spine) {
+      progress(`Lecture de l’EPUB… chapitre ${++k} / ${spine.length}`);
+      const f = zip.file(decodeURIComponent(resolvePath(base, href)));
+      if (f) paras.push(...htmlToParas(await f.async('text')));
+    }
+    return paras;
+  }
+
+  async function readOffice(buf, path, ns, names) {
+    await loadScript(JSZIP);
+    const zip = await JSZip.loadAsync(buf);
+    const f = zip.file(path);
+    if (!f) throw new Error('fichier abîmé ou protégé');
+    const d = new DOMParser().parseFromString(await f.async('text'), 'application/xml');
+    return [...d.getElementsByTagNameNS(ns, '*')].filter(e => names.includes(e.localName))
+      .map(e => e.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  }
+
+  const rtfToText = s => s
+    .replace(/\\par[d]?/g, '\n')
+    .replace(/\{\\\*[^{}]*\}/g, '')
+    .replace(/\\'([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\[a-z]+-?\d* ?/gi, '')
+    .replace(/[{}]/g, '');
+
+  async function handleFile(file) {
+    if (!file) return;
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const progress = t => { $('docinfo').textContent = t; };
+    const TEXT = ['txt', 'md', 'markdown', 'csv', 'json', 'log'];
+    try {
+      progress('Lecture…');
+      let paras;
+      if (ext === 'pdf') paras = await readPdf(await file.arrayBuffer(), progress);
+      else if (ext === 'epub') paras = await readEpub(await file.arrayBuffer(), progress);
+      else if (ext === 'docx') paras = await readOffice(await file.arrayBuffer(), 'word/document.xml', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main', ['p']);
+      else if (ext === 'odt') paras = await readOffice(await file.arrayBuffer(), 'content.xml', 'urn:oasis:names:tc:opendocument:xmlns:text:1.0', ['p', 'h']);
+      else if (['html', 'htm', 'xhtml'].includes(ext)) paras = htmlToParas(await file.text());
+      else if (ext === 'rtf') paras = linesToParas(rtfToText(await file.text()).split('\n'));
+      else if (TEXT.includes(ext)) paras = linesToParas((await file.text()).split(/\r?\n/));
+      else throw new Error('format non pris en charge. Essaie PDF, EPUB, DOCX, ODT, TXT, MD, HTML, RTF ou CSV');
+      paras = paras.filter(p => /[\p{L}\p{N}]/u.test(p));
+      if (!paras.length) throw new Error(ext === 'pdf' ? 'ce PDF ne contient pas de texte (c’est sans doute une image scannée)' : 'aucun texte trouvé');
+      docName = file.name;
+      lastQuery = '';
+      pages = paginate(paras);
+      $('pager').hidden = false;
+      $('presets').hidden = true;
+      $('q').value = '';
+      renderPage(0);
+      const total = pageNorms.reduce((a, p) => a + p.length, 0);
+      progress(`${file.name} · ${pages.length} page${pages.length > 1 ? 's' : ''} · ${total.toLocaleString('fr-FR')} mots. Pose ta question.`);
+      $('q').focus();
+    } catch (e) {
+      progress('Impossible de lire ce fichier : ' + e.message + '.');
+    }
+  }
+
+  // --- Recherche ---
+  function setAnswer(main, sub, ok) {
+    $('ans').textContent = main;
+    $('ans').classList.toggle('long', main.length > 40);
+    $('src').textContent = sub;
+    $('answerBox').classList.toggle('found', ok);
+  }
+
+  function hits(list) {
+    const box = $('hits');
+    box.textContent = '';
+    if (list.length < 2) return;
+    for (const i of list) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = 'p. ' + (i + 1);
+      b.setAttribute('aria-pressed', String(i === pageIdx));
+      b.addEventListener('click', () => { renderPage(i); search(lastQuery, false); });
+      box.append(b);
+    }
+  }
+
+  function search(text, jump = true) {
+    const toks = tokens(text);
+    if (!toks.length) return setAnswer('Question trop courte', 'Tape au moins un mot de 3 lettres.', false);
+    lastQuery = text;
+    let found = [];
+    if (pages) {
+      const scored = pageNorms.map((ns, i) => {
+        let s = 0;
+        for (const t of toks) { let c = 0; for (const n of ns) if (fuzzy(t, n)) c++; if (c) s += 2 + Math.log(c); }
+        return [s, i];
+      }).filter(a => a[0] > 0).sort((a, b) => b[0] - a[0]);
+      found = scored.slice(0, 8).map(a => a[1]);
+      if (!found.length) return setAnswer('Introuvable', 'Aucune page ne parle de ça. Essaie un autre mot.', false);
+      if (jump && found[0] !== pageIdx) renderPage(found[0]);
+    }
+    const byGroup = new Map();
+    for (const w of words) {
+      const hit = toks.filter(t => fuzzy(t, w.n));
+      if (!hit.length) continue;
+      const g = byGroup.get(w.g) || { toks: new Set(), n: 0 };
+      hit.forEach(t => g.toks.add(t)); g.n++;
+      byGroup.set(w.g, g);
+    }
+    if (!byGroup.size) { hits(found); return setAnswer('Rien sur cette page', 'Choisis une autre page ci-dessus.', false); }
+    const [bestG] = [...byGroup].sort((a, b) => (b[1].toks.size - a[1].toks.size) || (b[1].n - a[1].n))[0];
+    const idx = words.filter(w => w.g === bestG && toks.some(t => fuzzy(t, w.n))).map(w => w.i);
+    const where = pages ? `Page ${pageIdx + 1} · ${docName}` : 'Résumé d’exemple';
+    const q = makeQuery(`${pageIdx}:${toks.join(' ')}`, idx, toks, w => ({ text: sentenceOf(w), src: where }), { readable: true });
+    setQuery(q, null);
+    hits(found);
+  }
+
+  // --- Araignée ---
+  let W = 0, H = 0, u = 1, speed = 1, Q = null, state = 'idle', steps = 0, path = [], recent = [], wait = 0;
+  const S = { x: 0, y: 0, vx: 0, vy: 0, rot: 0, anchorX: 0, target: null, drag: { x: 0, y: 0 }, dragAt: 0 };
+  const legs = [];
+  for (const side of [1, -1]) ANGLES.forEach((deg, i) => legs.push({
+    side, attach: -0.38 + i * 0.19, group: (i + (side === 1 ? 0 : 1)) % 2,
+    ang: (side === 1 ? deg : 180 - deg) * Math.PI / 180, foot: { x: 0, y: 0 }, from: null, to: null, t: 1, word: null, pinned: false
+  }));
+
+  const dims = () => ({ bw: 11 * u, bh: 34 * u, coxa: 7 * u, femur: 44 * u, tibia: 50 * u, home: 66 * u });
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const toWorld = (lx, ly) => {
+    const c = Math.cos(S.rot), s = Math.sin(S.rot);
+    return { x: S.x + lx * c - ly * s, y: S.y + lx * s + ly * c };
+  };
+
+  function fit() {
+    let fs = pages ? baseFs() : 18;
+    const set = () => { doc.style.fontSize = fs + 'px'; doc.style.lineHeight = fs < 15 ? '1.75' : '2.1'; };
+    set();
+    while (fs > 9 && doc.scrollHeight > stage.clientHeight) { fs -= 0.5; set(); }
+  }
+
+  function measure() {
+    const r = stage.getBoundingClientRect();
+    for (const w of words) {
+      const b = w.el.getBoundingClientRect();
+      w.x = b.left - r.left + b.width / 2; w.y = b.top - r.top + b.height / 2;
+      w.vis = b.width > 0 && w.y > 0 && w.y < H;
+    }
+  }
+
+  function legFrame(leg) {
+    const d = dims();
+    const hip = toWorld(leg.side * d.bw / 2, leg.attach * d.bh);
+    const a = leg.ang + S.rot, dx = Math.cos(a), dy = Math.sin(a);
+    return { d, hip, coxaEnd: { x: hip.x + dx * d.coxa, y: hip.y + dy * d.coxa }, home: { x: hip.x + dx * d.home, y: hip.y + dy * d.home } };
+  }
+
+  function footTarget(leg, f) {
+    const reach = f.d.femur + f.d.tibia - 6 * u;
+    let best = null, bestD = 34 * u;
+    for (const w of words) {
+      if (!w.vis) continue;
+      const dh = dist(w, f.home);
+      if (dh >= bestD || dist(w, f.coxaEnd) > reach || legs.some(l => l !== leg && l.word === w)) continue;
+      best = w; bestD = dh;
+    }
+    return best ? { x: best.x, y: best.y, word: best } : { x: f.home.x, y: f.home.y, word: null };
+  }
+
+  function plant(leg) {
+    leg.foot = { x: leg.to.x, y: leg.to.y };
+    leg.word = leg.to.word;
+    if (!leg.word) return;
+    const el = leg.word.el;
+    el.classList.remove('seen');
+    el.classList.add('grab', 'hit');
+    setTimeout(() => el.classList.remove('hit'), 400);
+    if (state === 'run' && Q.answer.has(leg.word.i)) found(leg.word);
+  }
+
+  function lift(leg) {
+    if (!leg.word) return;
+    const el = leg.word.el;
+    leg.word = null;
+    if (legs.some(l => l.word && l.word.el === el)) return;
+    el.classList.remove('grab');
+    el.classList.add('seen');
+    setTimeout(() => { if (!el.classList.contains('grab')) el.classList.remove('seen'); }, 2000);
+  }
+
+  function placeLegs() {
+    doc.querySelectorAll('.w.grab, .w.seen, .w.hit').forEach(el => el.classList.remove('grab', 'seen', 'hit'));
+    for (const leg of legs) { leg.word = null; leg.pinned = false; leg.to = footTarget(leg, legFrame(leg)); leg.t = 1; plant(leg); }
+  }
+
+  // --- Apprentissage ---
+  const exploration = () => Math.max(0.03, 0.3 * Math.pow(0.7, Q ? Q.wins : 0));
+
+  function think(w, why) {
+    let t;
+    if (why === 'explore') t = 'J’explore au hasard pour découvrir.';
+    else {
+      const top = Object.entries(why).sort((a, b) => b[1] - a[1])[0][0];
+      t = {
+        read: `Je lis « ${w.text} » : l’info doit être tout près.`,
+        path: 'Je suis un chemin qui a déjà marché.',
+        ahead: 'Je vois des mots utiles plus loin, j’y vais.',
+        map: 'Je me souviens où était l’info.',
+        cur: 'Je vais voir un mot que je ne connais pas encore.'
+      }[top];
+    }
+    if ($('think').textContent !== t) $('think').textContent = t;
+  }
+
+  function chooseNext() {
+    let R = Math.max(110, Math.min(W, H) * 0.22), cand = [];
+    while (!cand.length && R < Math.max(W, H) * 2) {
+      cand = words.filter(w => w.vis && !recent.includes(w.i) && dist(w, S) < R && dist(w, S) > 4 * u);
+      R *= 1.5;
+    }
+    if (!cand.length) return endEpisode(false);
+    const look = R / 1.5, diag = Math.hypot(W, H);
+    const memW = Q.mem != null ? words[Q.mem] : null, conf = Math.min(1, Q.wins / 2);
+    let pick, why;
+    if (Math.random() < exploration()) { pick = cand[Math.random() * cand.length | 0]; why = 'explore'; }
+    else {
+      let m = -Infinity;
+      for (const w of cand) {
+        let ahead = 0;
+        for (const o of words) if (o.vis && o !== w && dist(o, w) < look) ahead = Math.max(ahead, Q.V[o.i] + Q.P[o.i]);
+        const parts = {
+          read: Q.P[w.i], path: Q.V[w.i], ahead: 0.5 * ahead,
+          map: memW ? conf * 0.8 * (1 - dist(w, memW) / diag) : 0,
+          cur: 0.12 / Math.sqrt(1 + Q.N[w.i])
+        };
+        const s = parts.read + parts.path + parts.ahead + parts.map + parts.cur + Math.random() * 1e-3;
+        if (s > m) { m = s; pick = w; why = parts; }
+      }
+    }
+    think(pick, why);
+    Q.N[pick.i]++;
+    S.target = pick;
+    recent.push(pick.i); if (recent.length > 4) recent.shift();
+    path.push(pick.i);
+    steps++;
+  }
+
+  function learn() {
+    const met = new Set();
+    const r = path.map(i => {
+      if (Q.answer.has(i)) return 1;
+      if (Q.clue[i] && !met.has(i)) { met.add(i); return 0.3; }
+      return 0;
+    });
+    let G = 0;
+    for (let t = path.length - 1; t >= 0; t--) {
+      G = r[t] + GAMMA * G;
+      const i = path[t];
+      Q.V[i] = Math.min(1.5, Q.V[i] + ALPHA * (G - Q.V[i]));
+    }
+    paintHeat();
+  }
+
+  function endEpisode(ok) {
+    state = 'done';
+    S.target = null;
+    wait = ok ? 2.2 : 0.5;
+    Q.ep++;
+    Q.hist.push({ steps, ok });
+    if (ok) { Q.best = Math.min(Q.best, steps); Q.wins++; }
+    learn();
+    renderStats();
+  }
+
+  // Le corps recule pour ne pas cacher le mot, et la patte tournée vers lui s'étire pour s'y poser
+  function pinLegOn(w) {
+    const sr = stage.getBoundingClientRect(), b = w.el.getBoundingClientRect();
+    w.x = b.left - sr.left + b.width / 2; w.y = b.top - sr.top + b.height / 2;
+    const bx = S.x < w.x ? -0.45 : 0.45, by = w.y < H / 2 ? 1 : -1, bl = Math.hypot(bx, by);
+    const back = { x: bx / bl, y: by / bl };
+    const reach = (dims().femur + dims().tibia) * 0.85;
+    S.target = { x: w.x + back.x * reach, y: w.y + back.y * reach };
+    const want = Math.atan2(-back.y, -back.x);
+    let leg = null, bestD = Infinity;
+    for (const l of legs) {
+      const dd = Math.abs(Math.atan2(Math.sin(l.ang + S.rot - want), Math.cos(l.ang + S.rot - want)));
+      if (dd < bestD) { bestD = dd; leg = l; }
+    }
+    if (leg.word !== w) {
+      lift(leg);
+      leg.from = { ...leg.foot };
+      leg.to = { x: w.x, y: w.y, word: w };
+      leg.t = 0;
+    }
+    leg.pinned = true;
+  }
+
+  function found(w) {
+    if (path[path.length - 1] !== w.i) path.push(w.i);
+    Q.mem = w.i;
+    $('think').textContent = 'Trouvé ! Je pose ma patte dessus.';
+    Q.answer.forEach(i => words[i].el.classList.add('ans'));
+    const res = Q.extract(w);
+    setAnswer(res.text, res.src, true);
+    endEpisode(true);
+    pinLegOn(w);
+  }
+
+  function startEpisode() {
+    if (!W || !H || !Q) return;
+    doc.querySelectorAll('.w.ans').forEach(el => el.classList.remove('ans'));
+    S.x = W * (0.15 + Math.random() * 0.7); S.y = H * 0.1 + 20 * u;
+    S.vx = S.vy = 0; S.anchorX = S.x;
+    S.drag = { x: S.x, y: 0 };
+    steps = 0; path = []; recent = [];
+    placeLegs();
+    state = 'run';
+    chooseNext();
+  }
+
+  function paintHeat() {
+    for (const w of words) w.el.style.setProperty('--v', Q ? Math.min(1, Q.V[w.i]).toFixed(2) : 0);
+  }
+
+  function renderStats() {
+    const h = Q ? Q.hist : [];
+    $('ep').textContent = Q ? Q.ep : 0;
+    $('last').textContent = h.length ? (h[h.length - 1].ok ? h[h.length - 1].steps : 'raté') : '–';
+    $('best').textContent = Q && Q.best < Infinity ? Q.best : '–';
+    const e = Math.round(exploration() * 100);
+    $('explore').textContent = `Exploration ${e} % · elle choisit au hasard ${e} % du temps`;
+    const r = spark.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    spark.width = r.width * dpr; spark.height = r.height * dpr;
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sctx.clearRect(0, 0, r.width, r.height);
+    sctx.fillStyle = '#3a4249'; sctx.fillRect(0, r.height - 1, r.width, 1);
+    const last = h.slice(-40), bw = r.width / 40;
+    last.forEach((ev, k) => {
+      const bh = Math.max(2, (ev.steps / MAX_STEPS) * (r.height - 4));
+      sctx.fillStyle = ev.ok ? '#4fd6e3' : '#ec4d68';
+      sctx.fillRect(k * bw + 1, r.height - 1 - bh, Math.max(1, bw - 2), bh);
+    });
+  }
+
+  function setQuery(q, button) {
+    Q = q;
+    document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+    setAnswer('…', 'Elle cherche encore.', false);
+    paintHeat();
+    renderStats();
+    startEpisode();
+  }
+
+  // --- Simulation ---
+  function update(dt) {
+    if (state === 'done') { wait -= dt; if (wait <= 0) startEpisode(); }
+    if (state === 'idle' && (!S.target || dist(S, S.target) < 5 * u)) {
+      const vis = words.filter(w => w.vis && dist(w, S) < 200);
+      S.target = vis.length ? vis[Math.random() * vis.length | 0] : null;
+    }
+    const maxSpeed = (reduced ? 70 : 140) * u * (state === 'idle' ? 0.4 : 1);
+    const tgt = S.target || S;
+    const dx = tgt.x - S.x, dy = tgt.y - S.y, d = Math.hypot(dx, dy) || 1;
+    const sp = maxSpeed * Math.min(1, d / (30 * u));
+    const k = Math.min(1, dt * 5);
+    S.vx += (dx / d * sp - S.vx) * k;
+    S.vy += (dy / d * sp - S.vy) * k;
+    S.x += S.vx * dt; S.y += S.vy * dt;
+    S.rot += (Math.max(-0.3, Math.min(0.3, S.vx / maxSpeed * 0.25)) - S.rot) * Math.min(1, dt * 4);
+    S.anchorX += (S.x - S.anchorX) * Math.min(1, dt * 1.5);
+    S.dragAt -= dt;
+    if (S.dragAt <= 0) { S.drag = toWorld(0, dims().bh / 2); S.dragAt = 2.5; }
+
+    if (state === 'run' && S.target && d < 5 * u) {
+      if (Q.answer.has(S.target.i)) found(S.target);
+      else if (steps >= MAX_STEPS) endEpisode(false);
+      else chooseNext();
+    }
+
+    for (const leg of legs) {
+      const f = legFrame(leg);
+      if (leg.t < 1) {
+        leg.t = Math.min(1, leg.t + dt / 0.12);
+        const e = leg.t * leg.t * (3 - 2 * leg.t);
+        leg.foot = { x: leg.from.x + (leg.to.x - leg.from.x) * e, y: leg.from.y + (leg.to.y - leg.from.y) * e };
+        if (leg.t === 1) plant(leg);
+        continue;
+      }
+      if (leg.pinned) continue;
+      const tooFar = dist(leg.foot, f.coxaEnd) > f.d.femur + f.d.tibia - 2 * u;
+      if (dist(leg.foot, f.home) < 38 * u && !tooFar) continue;
+      if (legs.some(l => l.t < 1 && l.group !== leg.group) && !tooFar) continue;
+      lift(leg);
+      leg.from = { ...leg.foot };
+      leg.to = footTarget(leg, f);
+      leg.t = 0;
+    }
+  }
+
+  function knee(a, b, l1, l2) {
+    const d = Math.min(Math.max(dist(a, b), Math.abs(l1 - l2) + 1), l1 + l2 - 0.5);
+    const base = Math.atan2(b.y - a.y, b.x - a.x);
+    const A = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
+    const k1 = { x: a.x + Math.cos(base + A) * l1, y: a.y + Math.sin(base + A) * l1 };
+    const k2 = { x: a.x + Math.cos(base - A) * l1, y: a.y + Math.sin(base - A) * l1 };
+    const k = dist(k1, S) > dist(k2, S) ? k1 : k2;
+    const ang = Math.atan2(b.y - k.y, b.x - k.x);
+    return { k, foot: { x: k.x + Math.cos(ang) * l2, y: k.y + Math.sin(ang) * l2 } };
+  }
+
+  function dot(p, r, fill) {
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill; ctx.fill();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const d = dims();
+    const top = toWorld(0, -d.bh / 2), bottom = toWorld(0, d.bh / 2);
+
+    const barW = Math.min(180, W * 0.3), barH = 20;
+    ctx.fillStyle = C.silk;
+    ctx.fillRect(S.anchorX - barW / 2, 0, barW, barH);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = C.silk; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(S.anchorX, barH); ctx.lineTo(top.x, top.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(216, 31, 79, 0.7)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(S.drag.x, S.drag.y); ctx.stroke();
+
+    if (S.target && state === 'run') {
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = 'rgba(79, 214, 227, 0.5)';
+      ctx.beginPath(); ctx.moveTo(S.x, S.y); ctx.lineTo(S.target.x, S.target.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const lw = Math.max(1, 1.2 * u), jr = Math.max(1.3, 1.4 * u);
+    ctx.lineJoin = 'round';
+    for (const leg of legs) {
+      const f = legFrame(leg);
+      const { k, foot } = knee(f.coxaEnd, leg.foot, d.femur, d.tibia);
+      ctx.beginPath(); ctx.moveTo(f.hip.x, f.hip.y); ctx.lineTo(f.coxaEnd.x, f.coxaEnd.y); ctx.lineTo(k.x, k.y); ctx.lineTo(foot.x, foot.y);
+      const held = leg.pinned && leg.t >= 1;
+      ctx.strokeStyle = held ? '#7ef0a0' : C.leg; ctx.lineWidth = held ? lw * 1.6 : lw; ctx.stroke();
+      if (held) {
+        ctx.beginPath(); ctx.arc(foot.x, foot.y, (6 + 2 * Math.sin(performance.now() / 120)) * u, 0, Math.PI * 2);
+        ctx.strokeStyle = '#7ef0a0'; ctx.lineWidth = 1.2; ctx.stroke();
+      }
+      dot(f.coxaEnd, jr, C.joint);
+      dot(k, jr, C.joint);
+      dot(foot, leg.t < 1 ? jr * 1.5 : jr * 1.15, C.joint);
+    }
+
+    ctx.save();
+    ctx.translate(S.x, S.y); ctx.rotate(S.rot);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-d.bw / 2, -d.bh / 2, d.bw, d.bh, 2 * u); else ctx.rect(-d.bw / 2, -d.bh / 2, d.bw, d.bh);
+    ctx.fillStyle = C.body; ctx.fill();
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, d.bh / 2 - d.bw * 0.55, d.bw * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = C.eye; ctx.fill();
+    ctx.strokeStyle = C.eyeRim; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+
+  function resize() {
+    if (!stage.clientWidth || !stage.clientHeight) return;
+    const first = !W;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    W = stage.clientWidth; H = stage.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    u = Math.max(0.8, Math.min(W, H) / 520) * 1.35;
+    if (first) { S.x = S.anchorX = W / 2; S.y = H * 0.4; }
+    fit(); measure(); renderStats();
+    if (Q) startEpisode(); else placeLegs();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    for (let k = 0; k < speed; k++) update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // --- Contrôles ---
+  PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = p.label; b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      const idx = [...$(p.id).querySelectorAll('.w')].map(el => words.find(w => w.el === el).i);
+      setQuery(makeQuery('demo:' + p.label, idx, p.clues, () => ({ text: p.text, src: p.src }), { numeric: true }), b);
+    });
+    $('presets').append(b);
+  });
+
+  $('qf').addEventListener('submit', e => { e.preventDefault(); search($('q').value); });
+  $('file').addEventListener('change', e => { handleFile(e.target.files[0]); e.target.value = ''; });
+  $('demo').addEventListener('click', showDemo);
+  $('prev').addEventListener('click', () => { renderPage(pageIdx - 1); if (lastQuery) search(lastQuery, false); });
+  $('next').addEventListener('click', () => { renderPage(pageIdx + 1); if (lastQuery) search(lastQuery, false); });
+
+  stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drop'); });
+  stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
+  stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('drop'); handleFile(e.dataTransfer.files[0]); });
+
+  $('speeds').addEventListener('click', e => {
+    const b = e.target.closest('[data-s]');
+    if (!b) return;
+    speed = +b.dataset.s;
+    document.querySelectorAll('[data-s]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
+  $('reset').addEventListener('click', () => {
+    if (!Q) return;
+    Q.V.fill(0); Q.N.fill(0); Q.ep = 0; Q.wins = 0; Q.mem = null; Q.hist = []; Q.best = Infinity;
+    paintHeat(); renderStats(); startEpisode();
+  });
+
+  showDemo();
+  new ResizeObserver(resize).observe(stage);
+  document.fonts?.ready.then(resize);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
