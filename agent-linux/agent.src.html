@@ -48,6 +48,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   background-image: linear-gradient(to right, rgba(255, 181, 71, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 181, 71, 0.25) 1px, transparent 1px);
   background-size: calc(100% / 12) calc(100% / 8); }
 #desk.show-grid .grid-overlay { display: block; }
+#screen { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .hover-cell { position: absolute; z-index: 59; border-radius: 8px; background: rgba(255, 181, 71, 0.12); outline: 1px dashed rgba(255, 181, 71, 0.5); pointer-events: none; transition: left 0.08s, top 0.08s; }
 
 .dock { position: absolute; z-index: 40; border-radius: 18px; background: rgba(20, 23, 31, 0.78); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); }
@@ -144,11 +145,9 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 </style>
 <div id="app">
   <div id="desk" aria-label="Bureau Linux simulé">
-    <div class="topbar"><span class="act">Activités</span><span class="clock" id="clock">09:00</span><span class="tray"><span>FR</span><span>Wi-Fi</span><span>100 %</span></span></div>
-    <div id="layer"></div>
+    <canvas id="screen" width="960" height="640"></canvas>
     <div class="grid-overlay"></div>
     <div class="hover-cell" id="hover"></div>
-    <div id="cursor"><svg viewBox="0 0 22 24"><path d="M2 1 L2 19 L7 14.5 L10.5 22 L13.8 20.5 L10.3 13 L17.5 13 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="ring"></div></div>
     <div id="bubble"></div>
     <div id="keycap"></div>
   </div>
@@ -168,7 +167,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     <div class="card">
       <h2>1. Entraînement <em id="level">jamais entraîné</em></h2>
       <div class="row">
-        <button class="primary" id="train">Entraîner (environ 1 min)</button>
+        <button class="primary" id="train">Entraîner (environ 2 min)</button>
         <button id="forget">Tout oublier</button>
       </div>
       <div class="bar" id="progress"><i></i></div>
@@ -202,6 +201,12 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 /*BRAIN*/
 </script>
 <script>
+/*SCREEN*/
+</script>
+<script>
+/*GOALS*/
+</script>
+<script>
 (() => {
   const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, Hand, Head, choices, headState, pick, runStatus } = window.AgentLinux;
   const $ = id => document.getElementById(id);
@@ -209,112 +214,14 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   let hand = new Hand(), head = new Head();
 
   const pct = (x, y, w = 1, h = 1) => `left:${x / COLS * 100}%;top:${y / ROWS * 100}%;width:${w / COLS * 100}%;height:${h / ROWS * 100}%`;
-  const ICON = {
-    terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="#63d68a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5-5 5M12 17h7"/></svg>',
-    fichiers: '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" fill="#fff"/></svg>',
-    editeur: '<svg viewBox="0 0 24 24" fill="none" stroke="#3b6fd8" stroke-width="2" stroke-linecap="round"><path d="M6 6h12M6 10h12M6 14h8M6 18h5"/></svg>',
-    code: '<svg viewBox="0 0 24 24" fill="none" stroke="#c792ea" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>',
-    corbeille: '<svg viewBox="0 0 24 24" fill="none" stroke="#e6e9ef" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
-  };
-  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', code: '#252a3a', corbeille: '#4a505e' };
-  const FOLDER = '<svg class="ic" viewBox="0 0 30 24"><path d="M1 4a2 2 0 0 1 2-2h8l3 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#e8b84a"/><path d="M1 8h28v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#f5c95c"/></svg>';
-  const FILE = '<svg class="ic" viewBox="0 0 30 24"><path d="M9 1h9l5 5v16a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" fill="#dfe4ee"/><path d="M18 1v5h5" fill="#b9c0cf"/><path d="M11 12h9M11 15h9M11 18h6" stroke="#8a93a6" stroke-width="1.2"/></svg>';
-  const IMG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="2" fill="#7aa7ff"/><circle cx="11" cy="8" r="2.5" fill="#fff"/><path d="M5 19l6-6 4 4 3-3 7 7H5z" fill="#2d4f9e"/></svg>';
-  const PROG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="3" fill="#c792ea"/><path d="M11 9l-3 3 3 3M19 9l3 3-3 3" stroke="#fff" stroke-width="1.6" fill="none"/></svg>';
-  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k) ?? k;
-  const shown = (line, p) => line.replace('‹texte›', JSON.stringify(p.text ?? ''));
   function el(cls, style, html) { const d = document.createElement('div'); d.className = cls; if (style) d.style.cssText = style; if (html != null) d.innerHTML = html; return d; }
-  function highlight(code) {
-    const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    return esc.replace(/("[^"]*")/g, '<span class="st">$1</span>').replace(/\b(import|as|for|in)\b/g, '<span class="kw">$1</span>').replace(/\b(print|range|Tk|Label|Button|pack|mainloop)\b/g, '<span class="fn">$1</span>').replace(/\b(\d+)\b/g, '<span class="nu">$1</span>');
-  }
 
-  function render(e, p = {}) {
-    const L = $('layer');
-    L.textContent = '';
-    L.append(el('dock', pct(3, 7, 5, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
-    for (const [x, app] of Object.entries(DOCK)) {
-      const d = el('dicon' + (e.open.includes(app) ? ' on' : ''), pct(+x, 7), `<div class="tile" style="background:${TILE[app]}">${ICON[app]}</div>`);
-      if (app === 'corbeille' && e.trash.length) d.append(el('badge', '', String(e.trash.length)));
-      L.append(d);
-    }
-    const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
-    order.forEach((app, i) => {
-      const W = LAYOUT[app], z = 10 + i * 5;
-      const win = el('win' + (e.focus === app ? ' focus' : ''), pct(W.x0, W.y0, W.x1 - W.x0 + 1, W.y1 - W.y0 + 1) + `;z-index:${z}`);
-      const title = { terminal: `agent@linux: ${e.cwd.replace(HOME, '~')}`, fichiers: 'Fichiers', editeur: `${e.ed.name || 'Sans titre'} — Éditeur`, code: 'Atelier de code — programme.py', bac: `Bac à sable${e.ran ? ' — ' + e.ran.from : ''}` }[app];
-      const hb = el('hb'); hb.textContent = title;
-      const body = el('wbody');
-      win.append(hb, body);
-      L.append(win);
-      L.append(el('wbtn', pct(...W.close) + `;z-index:${z + 1};height:auto;top:calc(${W.close[1] / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
-      if (app === 'terminal') {
-        const t = el('term');
-        for (const { line, err } of e.term.slice(-12)) { const d = document.createElement('div'); d.textContent = line; if (err) d.className = 'err'; t.append(d); }
-        const ps = el('ps', '', '<b></b>$ <i></i><span class="caret"></span>');
-        ps.querySelector('b').textContent = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' ';
-        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ').replace('./ ', './');
-        t.append(ps);
-        body.append(t);
-      }
-      if (app === 'fichiers') {
-        const path = el('path'); path.textContent = e.fm.replace(HOME, '~');
-        hb.append(path);
-        L.append(el('wbtn', pct(...W.up) + `;z-index:${z + 1}`, '<div class="pill">↑ Parent</div>'));
-        L.append(el('wbtn', pct(...W.bin) + `;z-index:${z + 1}`, '<div class="pill red">Corbeille</div>'));
-        e.list(e.fm).slice(0, W.items.length).forEach((name, k) => {
-          const [ix, iy] = W.items[k], f = e.fs.get(e.fm + '/' + name);
-          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (f.d ? FOLDER : f.prog ? PROG : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
-          it.querySelector('span').textContent = name;
-          L.append(it);
-        });
-      }
-      if (app === 'editeur') {
-        const paper = el('paper'); paper.textContent = e.ed.text;
-        body.append(paper);
-        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px`);
-        if (e.ed.saving) { foot.innerHTML = 'Enregistrer sous : <span class="namebox"></span>'; foot.querySelector('.namebox').textContent = e.ed.nameBuf || ''; }
-        else foot.textContent = e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré';
-        L.append(foot);
-        L.append(el('wbtn', pct(...W.save) + `;z-index:${z + 2}`, '<div class="pill blue">Enregistrer</div>'));
-      }
-      if (app === 'code') {
-        const cb = el('codebody');
-        if (!e.code.length) cb.append(el('empty', '', 'Programme vide. Les lignes s’ajoutent depuis la palette de code.'));
-        e.code.forEach((line, k) => { const ln = el('ln', '', `<b>${k + 1}</b><span>${highlight(shown(line, p))}</span>`); cb.append(ln); });
-        const st = el('codestatus');
-        const rs = runStatus(e.run);
-        st.textContent = !e.run ? 'Pas encore exécuté' : e.run.error ? e.run.error : e.run.win && !e.run.win.shown ? 'La fenêtre s’est fermée tout de suite (il manque mainloop ?)' : rs.startsWith('fenetre') ? 'Fenêtre ouverte dans le bac à sable' + (e.run.late ? ' (des lignes après mainloop() ne s’exécuteront qu’à la fermeture)' : '') : `Sortie : ${e.run.out.join(' ') || '(rien)'}`;
-        st.classList.add(e.run?.error ? 'err' : e.run ? 'ok' : 'x');
-        cb.append(st);
-        body.append(cb);
-        L.append(el('wbtn', pct(...W.run) + `;z-index:${z + 1}`, '<div class="pill blue" title="Exécuter">▶ Lancer</div>'));
-        L.append(el('wbtn', pct(...W.build) + `;z-index:${z + 1}`, '<div class="pill" title="Construire un .exe">.exe</div>'));
-        L.append(el('wbtn', pct(...W.neu) + `;z-index:${z + 1}`, '<div class="pill">Nouveau</div>'));
-      }
-      if (app === 'bac') {
-        const bb = el('bacbody');
-        const r = e.ran;
-        if (!r) bb.append(el('', '', 'En attente d’un programme.'));
-        else {
-          r.out.forEach(o => { const d = document.createElement('div'); d.textContent = o; bb.append(d); });
-          if (r.error) { const d = el('err'); d.textContent = r.error; bb.append(d); }
-          else if (r.win && r.win.shown) {
-            const tk = el('tkwin', '', '<div class="tt"><span>tk</span><span>✕</span></div><div class="tc"></div>');
-            for (const lab of r.win.labels) { const d = document.createElement('div'); d.textContent = lab; tk.lastChild.append(d); }
-            for (let i = 0; i < r.win.buttons; i++) tk.lastChild.append(el('tb', '', 'Quitter'));
-            if (!r.win.labels.length && !r.win.buttons) tk.lastChild.append(el('', 'color:#777;font-size:.85em', '(fenêtre vide)'));
-            bb.append(tk);
-          } else if (r.win) bb.append(el('', 'color:var(--dim)', 'La fenêtre s’est ouverte puis refermée aussitôt.'));
-          else if (!r.out.length) bb.append(el('', 'color:var(--dim)', '(le programme n’a rien affiché)'));
-        }
-        body.append(bb);
-      }
-    });
-    $('cursor').style.left = ((e.cx + 0.5) / COLS * 100) + '%';
-    $('cursor').style.top = ((e.cy + 0.5) / ROWS * 100) + '%';
-    $('hover').style.cssText = pct(e.cx, e.cy);
-  }
+  // Le bureau est dessiné en continu sur le canevas par le module commun (le même que l'écran 3D)
+  const screenUI = window.AgentScreen($('screen'));
+  const word = screenUI.word, shown = screenUI.shown;
+  let shownEnv = null, shownP = {}, clock = '09:00';
+  function render(e, p = {}) { shownEnv = e; shownP = p; $('hover').style.cssText = pct(e.cx, e.cy); }
+  (function loop() { if (shownEnv) screenUI.draw(shownEnv, shownP, { clock }); requestAnimationFrame(loop); })();
 
   // ---------- Animation ----------
   let speed = 3;
@@ -339,7 +246,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       const m = hand.pick(e, c, 0.02);
       if (m === 4) {
         const useful = e.step(4, p);
-        if (animate) { const cu = $('cursor'); cu.classList.remove('click'); void cu.offsetWidth; cu.classList.add('click'); render(e, p); await sleep(200); }
+        if (animate) { screenUI.click(); render(e, p); await sleep(200); }
         return useful;
       }
       e.step(m, p);
@@ -395,7 +302,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   // Entraînement complet, découpé en petits morceaux pour que la page reste fluide
   function trainAll() {
     return new Promise(resolve => {
-      const total = 240000, chunk = 2000;
+      const total = 300000, chunk = 2000;
       let done = 0;
       hand.train(4000);
       bubble('Je m’entraîne… regarde mes compétences monter.', 4000);
@@ -425,9 +332,9 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     if (busy) return;
     lock(true);
     const task = T[$('taskSel').value];
-    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 1 min).', 4000); await trainAll(); }
+    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 2 min).', 4000); await trainAll(); }
     const e = new Env().reset(true);
-    if (task.setup) task.setup(e);
+    if (task.setup) task.setup(e, task.p);
     render(e, task.p);
     bubble('Objectif : ' + task.label.toLowerCase());
     await sleep(900);
@@ -438,67 +345,29 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   });
 
   // ---------- Mode libre ----------
-  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'robots'];
-  const FILES = ['memo.txt', 'plan.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
-  const APPS = ['robot.exe', 'bonjour.exe', 'outil.exe', 'jeu.exe'];
-  const SAY = ['Bonjour le monde', 'Je sais coder !', 'Salut, humain', 'Vive Linux'];
-  function chooseGoal(e, mem) {
-    const home = e.list(HOME);
-    const isFile = n => !e.isDir(HOME + '/' + n);
-    const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
-    const newDir = DIRS.filter(d => !home.includes(d));
-    const newFile = FILES.filter(f => !home.includes(f));
-    const myDirs = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
-    const exes = home.filter(n => n.endsWith('.exe') && !mem.launched.has(n));
-    const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
-    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je lis ${f}.` }); }
-    const readable = home.filter(n => n.endsWith('.txt') && e.fs.get(HOME + '/' + n).c);
-    if (readable.length) { const f = pick(readable), w = pick(e.fs.get(HOME + '/' + f).c.split(/[^\p{L}]+/u).filter(x => x.length > 3)); if (w) c.push({ t: 'grep', p: { file: f, word: w }, why: `Je cherche « ${w} » dans ${f} avec grep.` }); }
-    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je crée un dossier « ${d} ».` }); }
-    if (myDirs.length && newFile.length) { const d = pick(myDirs), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans ${d}.` }); }
-    if (newFile.length) { const f = pick(newFile); c.push({ t: 'echo', p: { file: f, text: pick(['coder', 'apprendre', 'dormir']) }, why: `J’écris une note dans ${f} avec echo.` }); }
-    const loose = home.filter(n => isFile(n) && (n.endsWith('.png') || n.endsWith('.txt')));
-    if (loose.length && myDirs.length) { const f = pick(loose), d = pick(myDirs); c.push({ t: pick(['cp', 'mv']), p: { file: f, dir: d }, why: `Je range ${f} dans ${d}.` }); }
-    if (home.includes('hello.py') && !mem.launched.has('hello.py')) c.push({ t: 'py', p: { file: 'hello.py' }, why: 'Il y a un script hello.py : je le lance avec python3.' });
-    c.push({ t: 'c-print', p: { text: pick(SAY) }, why: 'J’écris un petit programme qui affiche une phrase.' });
-    c.push({ t: 'c-count', p: {}, why: 'J’essaie une boucle qui compte jusqu’à 5.' });
-    c.push({ t: 'c-tk', p: { text: pick(SAY) }, why: 'Je fabrique une fenêtre avec tkinter.' });
-    c.push({ t: 'c-btn', p: {}, why: 'Je fais une fenêtre avec un bouton.' });
-    const newApp = APPS.filter(a => !home.includes(a));
-    if (newApp.length) { const a = pick(newApp); c.push({ t: 'c-exe', p: { file: a, text: pick(SAY) }, why: `Je construis mon application ${a}.` }); }
-    if (exes.length) { const x = pick(exes); c.push({ t: 'exe', p: { file: x }, why: `Je lance ${x} (chmod +x puis ./).` }); }
-    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6 + (g.t === 'exe' ? 0.5 : 0);
-    return c.sort((a, b) => b.score - a.score)[0];
-  }
-
   $('free').addEventListener('click', async () => {
     if (busy) return;
     lock(true);
     $('journal').textContent = '';
     // Sans entraînement, la main ne sait pas encore viser : il s'entraîne d'abord
-    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 1 min).', 4000); await trainAll(); }
+    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 2 min).', 4000); await trainAll(); }
     // Il part du bureau tel qu'il est à l'écran
     const e = current;
     e.run = null;
     render(e);
-    const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
+    const mem = window.AgentGoals.newMemory();
     let wins = 0, decisions = 0;
     for (let i = 0; i < 12; i++) {
-      const g = chooseGoal(e, mem);
-      const min = 9 * 60 + i * 4, clock = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-      $('clock').textContent = clock;
+      const g = window.AgentGoals.chooseGoal(e, mem);
+      const min = 9 * 60 + i * 4;
+      clock = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
       bubble(g.why, 2400);
       await sleep(800);
-      e.run = null; e.ran = null;
+      window.AgentGoals.prepare(e, g);
       const r = await perform(e, T[g.t], g.p, true);
       decisions += r.n;
-      mem.count[g.t] = (mem.count[g.t] || 0) + 1;
-      if (r.ok) {
-        wins++;
-        if (g.t === 'cat') mem.read.add(g.p.file);
-        if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
-        if (g.t === 'exe' || g.t === 'py') mem.launched.add(g.p.file);
-      }
+      window.AgentGoals.remember(e, g, r.ok, mem);
+      if (r.ok) wins++;
       const item = document.createElement('li');
       item.className = r.ok ? 'ok' : 'ko';
       item.innerHTML = '<b></b> <span></span><br><code></code>';

@@ -86,6 +86,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /*BRAIN*/
 </script>
 <script>
+/*SCREEN*/
+</script>
+<script>
+/*GOALS*/
+</script>
+<script>
 /*SKIN*/
 </script>
 <script>
@@ -203,142 +209,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   };
   S.resize();
 
-  // ---------- Dessin de l'écran (le bureau simulé, sur un canevas 960 × 640) ----------
-  const CW = SW / COLS, CH = SH / ROWS;
-  const cur = { x: 6.5 * CW, y: 3.5 * CH, ring: 0 };
-  const COLORS = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', code: '#252a3a', corbeille: '#4a505e' };
-  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k) ?? k;
-  const shown = (line, p) => line.replace('‹texte›', JSON.stringify(p.text ?? ''));
-  function rr(x, y, w, h, r) { sg.beginPath(); sg.moveTo(x + r, y); sg.arcTo(x + w, y, x + w, y + h, r); sg.arcTo(x + w, y + h, x, y + h, r); sg.arcTo(x, y + h, x, y, r); sg.arcTo(x, y, x + w, y, r); sg.closePath(); }
-  function text(str, x, y, color, size = 14, font = 'Inter', weight = 400, align = 'left') {
-    sg.fillStyle = color; sg.font = `${weight} ${size}px ${font}, system-ui, sans-serif`; sg.textAlign = align; sg.textBaseline = 'middle';
-    sg.fillText(str, x, y);
-  }
-  function clipText(str, max) { return str.length > max ? str.slice(0, max - 1) + '…' : str; }
-  function icon(app, cx, cy, s) {
-    sg.save(); sg.translate(cx, cy);
-    sg.lineWidth = 3; sg.lineCap = 'round'; sg.lineJoin = 'round';
-    if (app === 'terminal') { sg.strokeStyle = '#63d68a'; sg.beginPath(); sg.moveTo(-s * 0.3, -s * 0.2); sg.lineTo(-s * 0.05, 0); sg.lineTo(-s * 0.3, s * 0.2); sg.moveTo(0.02 * s, s * 0.22); sg.lineTo(s * 0.3, s * 0.22); sg.stroke(); }
-    if (app === 'fichiers') { sg.fillStyle = '#fff'; rr(-s * 0.3, -s * 0.2, s * 0.6, s * 0.42, 4); sg.fill(); }
-    if (app === 'editeur') { sg.strokeStyle = '#3b6fd8'; for (let i = 0; i < 4; i++) { sg.beginPath(); sg.moveTo(-s * 0.25, -s * 0.2 + i * s * 0.13); sg.lineTo(s * (i === 3 ? 0.05 : 0.25), -s * 0.2 + i * s * 0.13); sg.stroke(); } }
-    if (app === 'code') { sg.strokeStyle = '#c792ea'; sg.beginPath(); sg.moveTo(-s * 0.12, -s * 0.2); sg.lineTo(-s * 0.3, 0); sg.lineTo(-s * 0.12, s * 0.2); sg.moveTo(s * 0.12, -s * 0.2); sg.lineTo(s * 0.3, 0); sg.lineTo(s * 0.12, s * 0.2); sg.stroke(); }
-    if (app === 'corbeille') { sg.strokeStyle = '#e6e9ef'; sg.beginPath(); sg.moveTo(-s * 0.25, -s * 0.15); sg.lineTo(s * 0.25, -s * 0.15); sg.moveTo(-s * 0.18, -s * 0.15); sg.lineTo(-s * 0.13, s * 0.25); sg.lineTo(s * 0.13, s * 0.25); sg.lineTo(s * 0.18, -s * 0.15); sg.stroke(); }
-    sg.restore();
-  }
-  const pill = (label, cx, cy, bg, fg = '#fff') => { sg.font = '600 13px Inter, system-ui'; const w = sg.measureText(label).width + 18; sg.fillStyle = bg; rr(cx - w / 2, cy - 13, w, 26, 8); sg.fill(); text(label, cx, cy, fg, 13, 'Inter', 600, 'center'); };
-
-  function drawScreen(e, p, overlay) {
-    const g = sg;
-    const bg = g.createLinearGradient(0, 0, SW, SH); bg.addColorStop(0, '#1a2140'); bg.addColorStop(0.6, '#0f1424'); bg.addColorStop(1, '#0a0d17');
-    g.fillStyle = bg; g.fillRect(0, 0, SW, SH);
-    g.fillStyle = 'rgba(255,181,71,0.10)'; g.beginPath(); g.arc(SW * 0.82, SH * 0.25, 160, 0, Math.PI * 2); g.fill();
-    // Barre du haut
-    g.fillStyle = 'rgba(5,6,9,0.9)'; g.fillRect(0, 0, SW, 26);
-    text('Activités', 12, 13, '#e6e9ef', 13, 'Inter', 600);
-    text($('clock').textContent, SW / 2, 13, '#e6e9ef', 13, 'Inter', 600, 'center');
-    text('FR   Wi-Fi   100 %', SW - 12, 13, '#8a93a6', 12, 'Inter', 400, 'right');
-    // Dock
-    g.fillStyle = 'rgba(20,23,31,0.85)'; rr(3 * CW + 4, 7 * CH + 6, 5 * CW - 8, CH - 12, 16); g.fill();
-    for (const [x, app] of Object.entries(DOCK)) {
-      const cx = (+x + 0.5) * CW, cy = 7.5 * CH;
-      g.fillStyle = COLORS[app]; rr(cx - 24, cy - 24, 48, 48, 11); g.fill();
-      icon(app, cx, cy, 48);
-      if (e.open.includes(app)) { g.fillStyle = '#ffb547'; g.beginPath(); g.arc(cx, cy + 32, 3, 0, Math.PI * 2); g.fill(); }
-      if (app === 'corbeille' && e.trash.length) { g.fillStyle = '#ff6b6b'; g.beginPath(); g.arc(cx + 20, cy - 20, 9, 0, Math.PI * 2); g.fill(); text(String(e.trash.length), cx + 20, cy - 20, '#fff', 11, 'Inter', 600, 'center'); }
-    }
-    // Fenêtres, de l'arrière vers l'avant
-    const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
-    for (const app of order) {
-      const L = LAYOUT[app], x = L.x0 * CW + 3, y = L.y0 * CH + 3, w = (L.x1 - L.x0 + 1) * CW - 6, h = (L.y1 - L.y0 + 1) * CH - 6;
-      g.save();
-      g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = 18; g.shadowOffsetY = 6;
-      g.fillStyle = '#1d2029'; rr(x, y, w, h, 12); g.fill();
-      g.restore();
-      g.save(); rr(x, y, w, h, 12); g.clip();
-      g.fillStyle = '#262a35'; g.fillRect(x, y, w, 30);
-      const title = { terminal: `agent@linux: ${e.cwd.replace(HOME, '~')}`, fichiers: 'Fichiers', editeur: `${e.ed.name || 'Sans titre'} — Éditeur`, code: 'Atelier de code', bac: `Bac à sable${e.ran ? ' — ' + e.ran.from : ''}` }[app];
-      text(clipText(title, 38), x + w / 2, y + 15, e.focus === app ? '#e6e9ef' : '#8a93a6', 13, 'Inter', 600, 'center');
-      const by = y + 30, bh = h - 30;
-      if (app === 'terminal') {
-        g.fillStyle = '#0d0f14'; g.fillRect(x, by, w, bh);
-        const lines = e.term.slice(-7);
-        const prompt = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' $ ' + e.buf.map(k => word(k, p)).join(' ').replace('./ ', './');
-        lines.forEach((l, i) => text(clipText(l.line, 56), x + 10, by + 14 + i * 19, l.err ? '#ff6b6b' : '#e6e9ef', 13, 'JetBrains Mono'));
-        text(clipText(prompt, 56) + (Math.floor(performance.now() / 500) % 2 ? '▌' : ''), x + 10, by + 14 + lines.length * 19, '#63d68a', 13, 'JetBrains Mono');
-      }
-      if (app === 'fichiers') {
-        text(e.fm.replace(HOME, '~'), x + 12, y + 15, '#8a93a6', 11, 'JetBrains Mono');
-        pill('↑ Parent', (L.up[0] + 0.5) * CW, (L.up[1] + 0.5) * CH, '#2f3542');
-        pill('Corbeille', (L.bin[0] + 0.5) * CW, (L.bin[1] + 0.5) * CH, '#a53c3c');
-        e.list(e.fm).slice(0, L.items.length).forEach((name, k) => {
-          const [ix, iy] = L.items[k], cx = (ix + 0.5) * CW, cy = (iy + 0.5) * CH - 8, f = e.fs.get(e.fm + '/' + name);
-          if (e.sel === name) { g.fillStyle = 'rgba(59,111,216,0.45)'; rr(cx - 36, cy - 30, 72, 66, 8); g.fill(); }
-          if (f.d) { g.fillStyle = '#f5c95c'; rr(cx - 20, cy - 16, 40, 30, 4); g.fill(); g.fillStyle = '#e8b84a'; rr(cx - 20, cy - 20, 18, 8, 3); g.fill(); }
-          else { g.fillStyle = f.prog ? '#c792ea' : name.endsWith('.png') ? '#7aa7ff' : '#dfe4ee'; rr(cx - 14, cy - 19, 28, 36, 4); g.fill(); }
-          text(clipText(name, 11), cx, cy + 28, '#e6e9ef', 11, 'Inter', 400, 'center');
-        });
-      }
-      if (app === 'editeur') {
-        g.fillStyle = '#fbfaf6'; g.fillRect(x, by, w, bh - CH + 3);
-        text(clipText(e.ed.text, 44), x + 12, by + 18, '#23262d', 14, 'JetBrains Mono');
-        g.fillStyle = '#ece9e1'; g.fillRect(x, L.y1 * CH, w, CH);
-        text(e.ed.saving ? 'Enregistrer sous : ' + (e.ed.nameBuf || '') : e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré', x + 12, (L.y1 + 0.5) * CH, '#444', 13);
-        pill('Enregistrer', (L.save[0] + 0.5) * CW, (L.save[1] + 0.5) * CH, '#3b6fd8');
-      }
-      if (app === 'code') {
-        g.fillStyle = '#11141b'; g.fillRect(x, by, w, bh);
-        if (!e.code.length) text('Programme vide', x + 14, by + 20, '#8a93a6', 13);
-        e.code.forEach((l, i) => {
-          text(String(i + 1), x + 24, by + 18 + i * 22, '#4b5366', 13, 'JetBrains Mono', 400, 'right');
-          text(clipText(shown(l, p), 52), x + 36, by + 18 + i * 22, /^(import|for)/.test(l.trim()) ? '#c792ea' : '#e6e9ef', 13, 'JetBrains Mono');
-        });
-        const st = !e.run ? 'Pas encore exécuté' : e.run.error ? e.run.error : e.run.win && !e.run.win.shown ? 'La fenêtre s’est fermée tout de suite' : e.run.win ? 'Fenêtre ouverte dans le bac à sable' : 'Sortie : ' + (e.run.out.join(' ') || '(rien)');
-        g.fillStyle = '#181c25'; g.fillRect(x, y + h - 26, w, 26);
-        text(clipText(st, 60), x + 12, y + h - 13, e.run?.error ? '#ff6b6b' : e.run ? '#63d68a' : '#8a93a6', 12, 'JetBrains Mono');
-        pill('Nouveau', (L.neu[0] + 0.5) * CW, (L.neu[1] + 0.5) * CH + 8, '#2f3542');
-        pill('.exe', (L.build[0] + 0.5) * CW, (L.build[1] + 0.5) * CH + 8, '#2f3542');
-        pill('▶ Lancer', (L.run[0] + 0.5) * CW, (L.run[1] + 0.5) * CH + 8, '#3b6fd8');
-      }
-      if (app === 'bac') {
-        g.fillStyle = '#0f1218'; g.fillRect(x, by, w, bh);
-        const r = e.ran;
-        if (!r) text('En attente d’un programme', x + 12, by + 18, '#8a93a6', 12);
-        else if (r.error) text(clipText(r.error, 44), x + 12, by + 18, '#ff6b6b', 12, 'JetBrains Mono');
-        else if (r.win && r.win.shown) {
-          g.fillStyle = '#ececec'; rr(x + 14, by + 8, w * 0.62, bh - 16, 6); g.fill();
-          g.fillStyle = '#d6d6d6'; g.fillRect(x + 14, by + 8, w * 0.62, 16);
-          text('tk', x + 22, by + 16, '#333', 10);
-          const items = [...r.win.labels.map(l => ['l', l]), ...Array(r.win.buttons).fill(['b', 'Quitter'])];
-          items.slice(0, 2).forEach(([k, l], i) => {
-            const cy = by + 40 + i * 24, cx = x + 14 + w * 0.31;
-            if (k === 'b') { g.fillStyle = '#fff'; rr(cx - 34, cy - 10, 68, 20, 4); g.fill(); g.strokeStyle = '#999'; g.lineWidth = 1; g.stroke(); }
-            text(clipText(l, 20), cx, cy, '#222', 13, 'Inter', 500, 'center');
-          });
-        } else text(clipText(r.out.join('  ') || '(rien)', 40), x + 12, by + 18, '#e6e9ef', 13, 'JetBrains Mono');
-      }
-      g.restore();
-      // Bouton fermer
-      g.fillStyle = '#3a3f4c'; g.beginPath(); g.arc((L.close[0] + 0.5) * CW, y + 15, 9, 0, Math.PI * 2); g.fill();
-      text('✕', (L.close[0] + 0.5) * CW, y + 15, '#e6e9ef', 11, 'Inter', 600, 'center');
-      if (e.focus === app) { g.strokeStyle = 'rgba(255,181,71,0.6)'; g.lineWidth = 2; rr(x, y, w, h, 12); g.stroke(); }
-    }
-    // Curseur : il glisse vers sa case
-    const tx = (e.cx + 0.5) * CW, ty = (e.cy + 0.5) * CH;
-    cur.x += (tx - cur.x) * 0.35; cur.y += (ty - cur.y) * 0.35;
-    if (cur.ring > 0) { g.strokeStyle = `rgba(255,181,71,${cur.ring})`; g.lineWidth = 3; g.beginPath(); g.arc(cur.x, cur.y, 26 - cur.ring * 14, 0, Math.PI * 2); g.stroke(); cur.ring = Math.max(0, cur.ring - 0.06); }
-    g.save(); g.translate(cur.x - 3, cur.y - 3); g.scale(1.6, 1.6);
-    g.fillStyle = '#fff'; g.strokeStyle = '#111'; g.lineWidth = 1.4;
-    g.beginPath(); g.moveTo(2, 1); g.lineTo(2, 19); g.lineTo(7, 14.5); g.lineTo(10.5, 22); g.lineTo(13.8, 20.5); g.lineTo(10.3, 13); g.lineTo(17.5, 13); g.closePath(); g.fill(); g.stroke();
-    g.restore();
-    if (overlay) {
-      g.fillStyle = 'rgba(5,7,10,0.72)'; g.fillRect(0, 0, SW, SH);
-      text(overlay.title, SW / 2, SH / 2 - 30, '#e6e9ef', 30, 'Inter', 600, 'center');
-      g.fillStyle = '#242b38'; rr(SW / 2 - 220, SH / 2 + 4, 440, 14, 7); g.fill();
-      g.fillStyle = '#ffb547'; rr(SW / 2 - 220, SH / 2 + 4, 440 * overlay.p, 14, 7); g.fill();
-      text(overlay.sub, SW / 2, SH / 2 + 46, '#8a93a6', 16, 'Inter', 400, 'center');
-    }
-    screenTex.needsUpdate = true;
-  }
+  // ---------- Dessin de l'écran : module commun AgentScreen (bureau, applis, curseur) ----------
+  const screenUI = window.AgentScreen(screenCanvas);
+  const word = screenUI.word, shown = screenUI.shown;
 
   // ---------- L'agent et son cerveau ----------
   const hand = new Hand(), head = new Head();
@@ -349,7 +222,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   const clockEl = document.createElement('span'); clockEl.id = 'clock'; clockEl.textContent = '09:00'; clockEl.hidden = true; document.body.append(clockEl);
 
   // Boucle d'affichage de l'écran (chaque image)
-  (function screenLoop() { drawScreen(env, curP, overlay); requestAnimationFrame(screenLoop); })();
+  (function screenLoop() { screenUI.draw(env, curP, { overlay, clock: $('clock').textContent }); screenTex.needsUpdate = true; requestAnimationFrame(screenLoop); })();
 
   let speed = 1, paused = false;
   const sleep = async ms => { let left = ms; while (left > 0) { await new Promise(r => setTimeout(r, 40)); if (!paused) left -= 40 * speed; } };
@@ -366,7 +239,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       const m = hand.pick(env, c, 0.02);
       if (m === 4) {
         const useful = env.step(4, p);
-        clickAt = S.time(); cur.ring = 1;
+        clickAt = S.time(); screenUI.click();
         await sleep(260);
         return useful;
       }
@@ -399,44 +272,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     return { ok: false, log, n: 25 };
   }
 
-  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'robots'];
-  const FILES = ['memo.txt', 'plan.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
-  const APPS = ['robot.exe', 'bonjour.exe', 'outil.exe', 'jeu.exe'];
-  const SAY = ['Bonjour le monde', 'Je sais coder !', 'Salut, humain', 'Vive Linux'];
-  function chooseGoal(e, mem) {
-    const home = e.list(HOME);
-    const isFile = n => !e.isDir(HOME + '/' + n);
-    const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
-    const newDir = DIRS.filter(d => !home.includes(d));
-    const newFile = FILES.filter(f => !home.includes(f));
-    const myDirs = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
-    const exes = home.filter(n => n.endsWith('.exe') && !mem.launched.has(n));
-    const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
-    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je lis ${f}.` }); }
-    const readable = home.filter(n => n.endsWith('.txt') && e.fs.get(HOME + '/' + n).c);
-    if (readable.length) { const f = pick(readable), w = pick(e.fs.get(HOME + '/' + f).c.split(/[^\p{L}]+/u).filter(x => x.length > 3)); if (w) c.push({ t: 'grep', p: { file: f, word: w }, why: `Je cherche « ${w} » dans ${f}.` }); }
-    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je crée un dossier « ${d} ».` }); }
-    if (myDirs.length && newFile.length) { const d = pick(myDirs), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans ${d}.` }); }
-    if (newFile.length) { const f = pick(newFile); c.push({ t: 'echo', p: { file: f, text: pick(['coder', 'apprendre', 'dormir']) }, why: `J’écris une note dans ${f}.` }); }
-    const loose = home.filter(n => isFile(n) && (n.endsWith('.png') || n.endsWith('.txt')));
-    if (loose.length && myDirs.length) { const f = pick(loose), d = pick(myDirs); c.push({ t: pick(['cp', 'mv']), p: { file: f, dir: d }, why: `Je range ${f} dans ${d}.` }); }
-    if (home.includes('hello.py') && !mem.launched.has('hello.py')) c.push({ t: 'py', p: { file: 'hello.py' }, why: 'Je lance le script hello.py.' });
-    c.push({ t: 'c-print', p: { text: pick(SAY) }, why: 'J’écris un programme qui affiche une phrase.' });
-    c.push({ t: 'c-count', p: {}, why: 'J’écris une boucle qui compte jusqu’à 5.' });
-    c.push({ t: 'c-tk', p: { text: pick(SAY) }, why: 'Je fabrique une fenêtre avec tkinter.' });
-    c.push({ t: 'c-btn', p: {}, why: 'Je fais une fenêtre avec un bouton.' });
-    const newApp = APPS.filter(a => !home.includes(a));
-    if (newApp.length) { const a = pick(newApp); c.push({ t: 'c-exe', p: { file: a, text: pick(SAY) }, why: `Je construis mon application ${a}.` }); }
-    if (exes.length) { const x = pick(exes); c.push({ t: 'exe', p: { file: x }, why: `Je lance ${x}.` }); }
-    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6 + (g.t === 'exe' ? 0.5 : 0);
-    return c.sort((a, b) => b.score - a.score)[0];
-  }
-
   async function train() {
     $('phase').textContent = 'entraînement';
     anim('reflechir');
     hand.train(4000);
-    const total = 240000, chunk = 2000;
+    const total = 300000, chunk = 1500;
     for (let done = 0; done < total; done += chunk) {
       head.train(chunk);
       overlay.p = (done + chunk) / total;
@@ -450,24 +290,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     bubble('Je m’entraîne d’abord sur des milliers d’essais…', 4000);
     await train();
     anim('reussi'); bubble('Prêt ! Je me mets au travail.'); await sleep(1600);
-    const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
+    const mem = window.AgentGoals.newMemory();
     let wins = 0, total = 0, minute = 9 * 60;
     for (;;) {
-      const g = chooseGoal(env, mem);
+      const g = window.AgentGoals.chooseGoal(env, mem);
       curP = g.p;
       minute += 3;
       $('clock').textContent = `${String(minute / 60 % 24 | 0).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
       $('phase').textContent = g.why;
       anim('reflechir'); bubble(g.why); await sleep(1100);
-      env.run = null; env.ran = null;
+      window.AgentGoals.prepare(env, g);
       const r = await perform(T[g.t], g.p);
-      total++; mem.count[g.t] = (mem.count[g.t] || 0) + 1;
-      if (r.ok) {
-        wins++;
-        if (g.t === 'cat') mem.read.add(g.p.file);
-        if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
-        if (g.t === 'exe' || g.t === 'py') mem.launched.add(g.p.file);
-      }
+      total++; window.AgentGoals.remember(env, g, r.ok, mem);
+      if (r.ok) wins++;
       const li = document.createElement('li'); li.className = r.ok ? 'ok' : 'ko';
       li.textContent = `${$('clock').textContent} ${g.why} ${r.ok ? `Réussi en ${r.n} décision${r.n > 1 ? 's' : ''}.` : 'Raté.'}`;
       $('journal').append(li); $('journal').scrollTop = $('journal').scrollHeight;

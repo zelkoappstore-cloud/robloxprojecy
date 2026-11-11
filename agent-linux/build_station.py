@@ -34,6 +34,8 @@ for old, new in replacements:
 
 page = (here / 'station.src.html').read_text(encoding='utf-8')
 page = page.replace('/*BRAIN*/', (here / 'brain.js').read_text(encoding='utf-8'))
+page = page.replace('/*SCREEN*/', (here / 'screen.js').read_text(encoding='utf-8'))
+page = page.replace('/*GOALS*/', (here / 'goals.js').read_text(encoding='utf-8'))
 page = page.replace('/*SKIN*/', js)
 (here / 'station.html').write_text(page, encoding='utf-8')
 print('station.html construit')
