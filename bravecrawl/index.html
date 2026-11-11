@@ -93,6 +93,20 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 .pager { justify-content: space-between; font-family: var(--mono); font-size: 12px; }
 .think { margin: 0; color: var(--box); font-size: 14px; line-height: 1.45; min-height: 2.9em; }
 .note { color: var(--ink-dim); font-size: 12px; line-height: 1.5; margin: 0; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.tabs button { justify-content: center; font-size: 12px; }
+.tabs button[aria-selected="true"] { border-color: var(--hit); color: var(--hit); }
+.stack { display: grid; gap: 6px; }
+.stack .row input { flex: 1 1 70px; }
+select { font: inherit; color: var(--box); background: var(--bg); border: 1px solid var(--ink-dim); border-radius: 6px; padding: 6px; }
+.ads { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+.ad { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--ink-dim); border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 12px; }
+.ad:hover { border-color: var(--ink); }
+.ad span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad b { color: var(--box); white-space: nowrap; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ad.match { border-color: var(--ok); }
+.ad.match b { color: var(--ok); }
+#doc canvas.chart { display: block; width: 100%; margin: 0.4em 0 0.8em; }
 
 @media (max-width: 760px) {
   #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
@@ -124,7 +138,13 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   <aside id="hud">
     <h1>Brave<span>Crawl</span></h1>
 
-    <div class="group">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-mode="doc" aria-selected="true">Fichier</button>
+      <button type="button" role="tab" data-mode="web" aria-selected="false">Site web</button>
+      <button type="button" role="tab" data-mode="trade" aria-selected="false">Trading</button>
+    </div>
+
+    <div class="group" data-panel="doc">
       <span class="label">Document</span>
       <div class="row">
         <label class="btn primary" for="file">Donner un fichier</label>
@@ -132,6 +152,38 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
         <button type="button" id="demo">Exemple</button>
       </div>
       <p class="note" id="docinfo">Exemple : résumé d’un rapport fictif. Donne-lui ton fichier (PDF, EPUB, DOCX, ODT, TXT, MD, HTML, RTF, CSV) ou glisse-le sur la page. Il reste sur ton appareil.</p>
+    </div>
+
+    <div class="group" data-panel="web" hidden>
+      <span class="label">Annonces sur un site</span>
+      <form id="wf" class="stack">
+        <input id="url" type="url" placeholder="Adresse de la page, ex. https://…" required autocomplete="off">
+        <div class="row">
+          <input id="kw" placeholder="Mot-clé" autocomplete="off">
+          <input id="pmin" type="number" min="0" step="any" inputmode="decimal" placeholder="Prix min">
+          <input id="pmax" type="number" min="0" step="any" inputmode="decimal" placeholder="Prix max">
+        </div>
+        <button class="primary" type="submit">Envoyer l’araignée</button>
+      </form>
+      <p class="note" id="webinfo">Colle l’adresse d’une page d’annonces ou de résultats. Elle respecte robots.txt et repère les annonces avec un prix.</p>
+      <div class="ads" id="ads"></div>
+    </div>
+
+    <div class="group" data-panel="trade" hidden>
+      <span class="label">Analyse crypto</span>
+      <form id="tf" class="row">
+        <input id="coin" value="bitcoin" placeholder="ex. bitcoin, eth, sol" autocomplete="off">
+        <select id="days" aria-label="Période">
+          <option value="30">30 j</option>
+          <option value="90" selected>90 j</option>
+          <option value="365">1 an</option>
+        </select>
+        <button class="primary" type="submit">Analyser</button>
+      </form>
+      <p class="note" id="tradeinfo">Données CoinGecko, en euros. Ce n’est pas un conseil financier.</p>
+    </div>
+
+    <div class="group">
       <div class="row pager" id="pager" hidden>
         <button type="button" id="prev" aria-label="Page précédente">◀</button>
         <span id="pageinfo">Page 1 / 1</span>
@@ -139,7 +191,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       </div>
     </div>
 
-    <div class="group">
+    <div class="group" id="askGroup">
       <span class="label">Ce qu'elle doit trouver</span>
       <div class="chips" id="presets"></div>
       <form id="qf">
@@ -284,6 +336,12 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     const out = [];
     let cur = [], n = 0;
     for (const para of paras) {
+      if (typeof para === 'object') {
+        const len = para.t.split(/\s+/).length;
+        if (cur.length && n + len + 3 > cap) { out.push(cur); cur = []; n = 0; }
+        cur.push(para); n += len + 3;
+        continue;
+      }
       const ws = para.split(/\s+/).filter(Boolean);
       while (ws.length) {
         const room = cap - n - (cur.length ? 3 : 0);
@@ -294,7 +352,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       }
     }
     if (cur.length) out.push(cur);
-    pageNorms = out.map(pg => pg.join(' ').split(/[\s'’\-]+/).map(norm).filter(Boolean));
+    pageNorms = out.map(pg => pg.map(x => typeof x === 'string' ? x : x.t).join(' ').split(/[\s'’\-]+/).map(norm).filter(Boolean));
     return out;
   }
 
@@ -318,7 +376,9 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     doc.append(tag);
     for (const para of pages[pageIdx]) {
       const p = document.createElement('p');
-      p.dataset.w = ''; p.textContent = para;
+      p.dataset.w = '';
+      if (typeof para === 'string') p.textContent = para;
+      else { p.textContent = para.t; p.dataset.ad = para.ad; }
       doc.append(p);
     }
     $('pageinfo').textContent = `Page ${pageIdx + 1} / ${pages.length}`;
@@ -328,7 +388,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   }
 
   function showDemo() {
-    pages = null; docName = ''; lastQuery = '';
+    pages = null; docName = ''; lastQuery = ''; ads = []; chartData = null;
     doc.innerHTML = DEMO_HTML;
     $('pager').hidden = true;
     $('presets').hidden = false;
@@ -362,8 +422,8 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     return out;
   }
 
-  function htmlToParas(html) {
-    const d = new DOMParser().parseFromString(html, 'text/html');
+  function htmlToParas(src) {
+    const d = typeof src === 'string' ? new DOMParser().parseFromString(src, 'text/html') : src.cloneNode(true);
     d.querySelectorAll('script, style, noscript, nav').forEach(e => e.remove());
     const blocks = [...d.body.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, td, th, dt, dd, figcaption')]
       .filter(e => !e.querySelector('p, li, h1, h2, h3, h4, h5, h6, blockquote, td'));
@@ -455,7 +515,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       paras = paras.filter(p => /[\p{L}\p{N}]/u.test(p));
       if (!paras.length) throw new Error(ext === 'pdf' ? 'ce PDF ne contient pas de texte (c’est sans doute une image scannée)' : 'aucun texte trouvé');
       docName = file.name;
-      lastQuery = '';
+      lastQuery = ''; ads = []; chartData = null;
       pages = paginate(paras);
       $('pager').hidden = false;
       $('presets').hidden = true;
@@ -467,6 +527,296 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     } catch (e) {
       progress('Impossible de lire ce fichier : ' + e.message + '.');
     }
+  }
+
+  // --- Modes ---
+  let ads = [], chartData = null;
+  function setMode(m) {
+    document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== m; });
+    $('askGroup').hidden = m === 'trade';
+  }
+
+  // --- Site web : annonces avec prix ---
+  const PRICE_RE = /(€|EUR|\$|USD|£|GBP|CHF)\s?(\d{1,3}(?:[ .  ']\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)|(\d{1,3}(?:[ .  ']\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s?(€|EUR|euros?\b|\$|USD|£|GBP|CHF)/i;
+  const CUR = { '€': '€', eur: '€', euro: '€', euros: '€', '$': '$', usd: '$', '£': '£', gbp: '£', chf: 'CHF' };
+  const clean = s => (s || '').replace(/\s+/g, ' ').trim();
+  const money = (v, cur = '€') => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 1 ? 6 : v < 100 ? 2 : 0 }) + ' ' + cur;
+
+  function parsePrice(s) {
+    const m = s.match(PRICE_RE);
+    if (!m) return null;
+    const cur = CUR[(m[1] || m[4]).toLowerCase()] || '€';
+    let n = (m[2] || m[3]).replace(/[\s  ']/g, ''), frac = '';
+    const dm = n.match(/[.,](\d{1,2})$/);
+    if (dm) { frac = dm[1]; n = n.slice(0, -dm[0].length); }
+    const v = parseFloat(n.replace(/[.,]/g, '') + (frac ? '.' + frac : ''));
+    return isFinite(v) ? { v, cur } : null;
+  }
+
+  // Trois méthodes, de la plus fiable à la plus large : données structurées, microdonnées, puis prix repérés dans le texte
+  function extractAds(d, base) {
+    const out = [], seen = new Set();
+    const abs = h => { try { const x = new URL(h, base); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
+    const push = (title, v, cur, link) => {
+      title = clean(title).slice(0, 140);
+      if (!title || !isFinite(v) || v <= 0) return;
+      const key = link + '|' + title + '|' + v;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ title, price: v, cur: cur || '€', link });
+    };
+    const walk = o => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (!o || typeof o !== 'object') return;
+      if (o.name && o.offers) {
+        const of = Array.isArray(o.offers) ? o.offers[0] : o.offers;
+        const v = parseFloat(String(of.price ?? of.lowPrice ?? '').replace(',', '.'));
+        push(o.name, v, CUR[String(of.priceCurrency || '').toLowerCase()], abs(o.url || of.url || ''));
+      }
+      for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+    };
+    d.querySelectorAll('script[type="application/ld+json"]').forEach(s => { try { walk(JSON.parse(s.textContent)); } catch { /* bloc JSON invalide : ignoré */ } });
+    d.querySelectorAll('[itemprop="price"]').forEach(el => {
+      const box = el.closest('[itemscope]');
+      if (!box) return;
+      const v = parseFloat(String(el.getAttribute('content') || el.textContent).replace(/[^\d.,]/g, '').replace(',', '.'));
+      const curEl = box.querySelector('[itemprop="priceCurrency"]');
+      const name = box.querySelector('[itemprop="name"]');
+      const a = box.querySelector('a[href]');
+      push(name ? (name.getAttribute('content') || name.textContent) : '', v, CUR[String(curEl?.getAttribute('content') || '').toLowerCase()], a ? abs(a.getAttribute('href')) : '');
+    });
+    if (out.length < 3) {
+      let count = 0;
+      for (const el of d.body.querySelectorAll('*')) {
+        if (count > 600 || out.length >= 200) break;
+        if (el.children.length || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') continue;
+        const txt = clean(el.textContent);
+        if (txt.length > 40) continue;
+        const p = parsePrice(txt);
+        if (!p) continue;
+        count++;
+        let card = el.parentElement;
+        for (let k = 0; k < 6 && card && card !== d.body; k++) {
+          if ((card.tagName === 'A' || card.querySelector('a[href]')) && clean(card.textContent).length > 15) break;
+          card = card.parentElement;
+        }
+        if (!card || card === d.body || clean(card.textContent).length > 800) continue;
+        const head = card.querySelector('h1, h2, h3, h4, h5, [class*="title" i], [class*="name" i]');
+        const links = [...card.querySelectorAll('a[href]')];
+        if (card.tagName === 'A') links.unshift(card);
+        const titleLink = links.sort((a, b) => clean(b.textContent).length - clean(a.textContent).length)[0];
+        const title = (clean(head?.textContent) || clean(titleLink?.textContent) || clean(card.textContent)).replace(txt, '').trim();
+        push(title, p.v, p.cur, abs((head?.closest('a') || titleLink)?.getAttribute('href') || ''));
+      }
+    }
+    return out;
+  }
+
+  function renderAds() {
+    const box = $('ads');
+    box.textContent = '';
+    for (const a of ads.slice(0, 100)) {
+      const el = document.createElement(a.link ? 'a' : 'div');
+      el.className = 'ad' + (a.ok ? ' match' : '');
+      if (a.link) { el.href = a.link; el.target = '_blank'; el.rel = 'noopener noreferrer'; }
+      const s = document.createElement('span'); s.textContent = a.title;
+      const b = document.createElement('b'); b.textContent = money(a.price, a.cur);
+      el.append(s, b);
+      box.append(el);
+    }
+  }
+
+  // L'araignée vise le prix des annonces qui correspondent à la recherche, sur la page affichée
+  function huntAds() {
+    const idx = [];
+    for (const p of doc.querySelectorAll('p[data-ad]')) {
+      if (!ads[+p.dataset.ad]?.ok) continue;
+      const ws = [...p.querySelectorAll('.w')];
+      let dash = ws.length - 1;
+      while (dash >= 0 && ws[dash].textContent !== '—') dash--;
+      for (const x of ws.slice(dash + 1)) idx.push(words.find(w => w.el === x).i);
+    }
+    if (!idx.length) return;
+    const where = docName;
+    const q = makeQuery(`ads:${pageIdx}`, idx, tokens($('kw').value), w => {
+      const a = ads[+w.el.closest('p').dataset.ad];
+      return { text: `${a.title} — ${money(a.price, a.cur)}`, src: `Annonce · ${where}` };
+    }, { readable: true });
+    setQuery(q, null);
+  }
+
+  async function crawlSite(e) {
+    e.preventDefault();
+    const url = $('url').value.trim(), kw = $('kw').value.trim();
+    const min = $('pmin').value === '' ? null : +$('pmin').value;
+    const max = $('pmax').value === '' ? null : +$('pmax').value;
+    const info = t => { $('webinfo').textContent = t; };
+    let host;
+    try { host = new URL(url).hostname; } catch { return info('Adresse invalide : elle doit commencer par https://'); }
+    info(`L’araignée part sur ${host}…`);
+    $('ads').textContent = '';
+    try {
+      const r = await fetch('/api/fetch?url=' + encodeURIComponent(url));
+      const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible du serveur' }));
+      if (!j.ok) throw new Error(j.error);
+      const d = new DOMParser().parseFromString(j.html, 'text/html');
+      ads = extractAds(d, j.url);
+      const toks = tokens(kw);
+      for (const a of ads) {
+        const tn = a.title.split(/\s+/).map(norm);
+        a.ok = (min == null || a.price >= min) && (max == null || a.price <= max) && toks.every(t => tn.some(n => fuzzy(t, n)));
+      }
+      ads.sort((a, b) => (b.ok - a.ok) || (a.price - b.price));
+      renderAds();
+      docName = host; lastQuery = ''; chartData = null;
+      const paras = ads.length ? ads.map((a, k) => ({ t: `${a.title} — ${money(a.price, a.cur)}`, ad: k })) : htmlToParas(d);
+      if (!paras.length) throw new Error('la page ne contient pas de texte lisible (elle est peut-être construite en JavaScript)');
+      pages = paginate(paras);
+      $('pager').hidden = false; $('presets').hidden = true;
+      renderPage(0);
+      const nOk = ads.filter(a => a.ok).length;
+      info(ads.length
+        ? `${ads.length} annonce${ads.length > 1 ? 's' : ''} sur ${host}, dont ${nOk} qui correspond${nOk > 1 ? 'ent' : ''} à ta recherche.`
+        : `Aucune annonce avec prix repérée sur ${host}. Pose une question sur le texte de la page.`);
+      if (nOk) huntAds();
+    } catch (err) { info('Impossible : ' + err.message + '.'); }
+  }
+
+  // --- Trading : analyse d'une crypto ---
+  async function getJSON(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(String(r.status));
+      return await r.json();
+    } catch {
+      const r = await fetch('/api/fetch?url=' + encodeURIComponent(url));
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      return JSON.parse(j.html);
+    }
+  }
+  const sma = (a, n, i) => (i + 1 < n ? null : a.slice(i + 1 - n, i + 1).reduce((s, x) => s + x, 0) / n);
+  function rsi(a, n = 14) {
+    if (a.length <= n) return 50;
+    let g = 0, l = 0;
+    for (let i = 1; i <= n; i++) { const d = a[i] - a[i - 1]; if (d > 0) g += d; else l -= d; }
+    g /= n; l /= n;
+    for (let i = n + 1; i < a.length; i++) {
+      const d = a[i] - a[i - 1];
+      g = (g * (n - 1) + Math.max(d, 0)) / n;
+      l = (l * (n - 1) + Math.max(-d, 0)) / n;
+    }
+    return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  }
+  const pct = x => (x >= 0 ? '+' : '−') + Math.abs(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
+
+  async function analyze(e) {
+    e.preventDefault();
+    const q = $('coin').value.trim(), days = +$('days').value;
+    const info = t => { $('tradeinfo').textContent = t; };
+    if (!q) return;
+    info('Recherche de la crypto…');
+    try {
+      const s = await getJSON('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(q));
+      const coin = s.coins && s.coins[0];
+      if (!coin) throw new Error(`« ${q} » introuvable`);
+      info(`Téléchargement des prix de ${coin.name}…`);
+      const m = await getJSON(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coin.id)}/market_chart?vs_currency=eur&days=${days}`);
+      const byDay = new Map();
+      for (const [t, p] of m.prices || []) byDay.set(new Date(t).toISOString().slice(0, 10), { t, p });
+      const series = [...byDay.values()];
+      if (series.length < 15) throw new Error('pas assez de données pour cette période');
+      const px = series.map(x => x.p);
+      const last = px[px.length - 1];
+      const s20 = px.map((_, i) => sma(px, 20, i)), s50 = px.map((_, i) => sma(px, 50, i));
+      const r = rsi(px);
+      const rets = px.slice(1).map((p, i) => Math.log(p / px[i]));
+      const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+      const vol = Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / (rets.length - 1)) * Math.sqrt(365);
+      let peak = -Infinity, dd = 0;
+      for (const p of px) { peak = Math.max(peak, p); dd = Math.min(dd, p / peak - 1); }
+      const a20 = s20[s20.length - 1], a50 = s50[s50.length - 1];
+      const up = a50 != null ? a20 > a50 : last > a20;
+      const wk = px.length > 7 ? last / px[px.length - 8] - 1 : 0;
+      const verdict = up ? (r > 70 ? 'positif mais en surchauffe' : 'plutôt positif') : (r < 30 ? 'négatif mais survendu' : 'plutôt négatif');
+      chartData = { px, s20, s50, up };
+      renderTrade(coin, days, { last, first: px[0], hi: Math.max(...px), lo: Math.min(...px), a20, a50, r, vol, dd, wk, up, verdict });
+      info(`Données CoinGecko du ${new Date(series[series.length - 1].t).toLocaleDateString('fr-FR')}. Ce n’est pas un conseil financier.`);
+    } catch (err) { info('Impossible : ' + err.message + '. Réessaie dans une minute (l’API gratuite limite le nombre de demandes).'); }
+  }
+
+  function renderTrade(coin, days, k) {
+    pages = null; ads = []; lastQuery = ''; docName = coin.name;
+    $('pager').hidden = true; $('presets').hidden = true;
+    const per = days === 365 ? '1 an' : days + ' jours';
+    const zone = k.r > 70 ? 'surachat' : k.r < 30 ? 'survente' : 'zone neutre';
+    const lines = [
+      ['tag', `${coin.symbol} · ${per} · données CoinGecko`],
+      ['chart'],
+      ['p', `${coin.name} vaut ${money(k.last)}, soit ${pct(k.last / k.first - 1)} sur ${per} (plus haut ${money(k.hi)}, plus bas ${money(k.lo)}). Sur 7 jours : ${pct(k.wk)}.`],
+      ['p', k.a50 != null
+        ? `Tendance ${k.up ? 'haussière' : 'baissière'} : la moyenne 20 jours (${money(k.a20)}) est ${k.up ? 'au-dessus' : 'en dessous'} de la moyenne 50 jours (${money(k.a50)}).`
+        : `Tendance ${k.up ? 'haussière' : 'baissière'} : le prix est ${k.up ? 'au-dessus' : 'en dessous'} de sa moyenne 20 jours (${money(k.a20)}).`],
+      ['p', `RSI 14 jours : ${Math.round(k.r)}, ${zone}. Volatilité annualisée : ${Math.round(k.vol * 100)} %. Pire baisse de la période : ${pct(k.dd)}.`],
+      ['v', `Avis de l’araignée : ${k.verdict}.`],
+      ['p', 'Ce n’est pas un conseil financier : une crypto peut perdre beaucoup de valeur très vite.']
+    ];
+    doc.textContent = '';
+    for (const [type, text] of lines) {
+      if (type === 'chart') {
+        const c = document.createElement('canvas');
+        c.className = 'chart'; c.id = 'chart'; c.style.height = Math.round(H * 0.3) + 'px';
+        doc.append(c);
+        continue;
+      }
+      const p = document.createElement('p');
+      p.dataset.w = ''; p.textContent = text;
+      if (type === 'tag') p.className = 'tag';
+      if (type === 'v') p.id = 'verdict';
+      doc.append(p);
+    }
+    afterRender();
+    drawChart();
+    const vw = [...$('verdict').querySelectorAll('.w')];
+    const colon = vw.findIndex(x => x.textContent === ':');
+    const idx = vw.slice(colon + 1).map(x => words.find(w => w.el === x).i);
+    const label = k.verdict[0].toUpperCase() + k.verdict.slice(1);
+    setQuery(makeQuery(`trade:${coin.id}:${days}`, idx, ['tendance', 'rsi', 'avis'], () => ({ text: label, src: `${coin.name} · ${per} · pas un conseil financier` }), { readable: true }), null);
+  }
+
+  function drawChart() {
+    const c = $('chart');
+    if (!c || !chartData) return;
+    const r = c.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    if (!r.width || !r.height) return;
+    c.width = r.width * dpr; c.height = r.height * dpr;
+    const g = c.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { px, s20, s50, up } = chartData;
+    const lo = Math.min(...px), hi = Math.max(...px), pad = 8;
+    const X = i => pad + (i / (px.length - 1)) * (r.width - pad * 2);
+    const Y = v => pad + (1 - (v - lo) / (hi - lo || 1)) * (r.height - pad * 2 - 14);
+    const main = up ? '#7ef0a0' : '#ec4d68';
+    g.strokeStyle = '#1b2228'; g.lineWidth = 1;
+    for (let k = 0; k <= 3; k++) { const y = pad + k * (r.height - pad * 2 - 14) / 3; g.beginPath(); g.moveTo(0, y); g.lineTo(r.width, y); g.stroke(); }
+    g.beginPath();
+    px.forEach((v, i) => (i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))));
+    g.lineTo(X(px.length - 1), Y(lo)); g.lineTo(X(0), Y(lo)); g.closePath();
+    g.fillStyle = up ? 'rgba(126, 240, 160, 0.08)' : 'rgba(236, 77, 104, 0.08)'; g.fill();
+    const line = (arr, color, w) => {
+      g.beginPath();
+      let started = false;
+      arr.forEach((v, i) => { if (v == null) return; if (started) g.lineTo(X(i), Y(v)); else { g.moveTo(X(i), Y(v)); started = true; } });
+      g.strokeStyle = color; g.lineWidth = w; g.stroke();
+    };
+    line(px, main, 1.6);
+    line(s20, '#4fd6e3', 1);
+    line(s50, '#ff2e93', 1);
+    g.beginPath(); g.arc(X(px.length - 1), Y(px[px.length - 1]), 3, 0, Math.PI * 2); g.fillStyle = main; g.fill();
+    g.font = '11px "IBM Plex Mono", monospace';
+    g.fillStyle = '#4fd6e3'; g.fillText('moy. 20 j', pad, r.height - 4);
+    g.fillStyle = '#ff2e93'; g.fillText('moy. 50 j', pad + 80, r.height - 4);
   }
 
   // --- Recherche ---
@@ -878,7 +1228,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     u = Math.max(0.8, Math.min(W, H) / 520) * 1.35;
     if (first) { S.x = S.anchorX = W / 2; S.y = H * 0.4; }
-    fit(); measure(); renderStats();
+    fit(); drawChart(); measure(); renderStats();
     if (Q) startEpisode(); else placeLegs();
   }
 
@@ -905,8 +1255,12 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   $('qf').addEventListener('submit', e => { e.preventDefault(); search($('q').value); });
   $('file').addEventListener('change', e => { handleFile(e.target.files[0]); e.target.value = ''; });
   $('demo').addEventListener('click', showDemo);
-  $('prev').addEventListener('click', () => { renderPage(pageIdx - 1); if (lastQuery) search(lastQuery, false); });
-  $('next').addEventListener('click', () => { renderPage(pageIdx + 1); if (lastQuery) search(lastQuery, false); });
+  const turn = i => { renderPage(i); if (lastQuery) search(lastQuery, false); else if (ads.some(a => a.ok)) huntAds(); };
+  $('prev').addEventListener('click', () => turn(pageIdx - 1));
+  $('next').addEventListener('click', () => turn(pageIdx + 1));
+  $('wf').addEventListener('submit', crawlSite);
+  $('tf').addEventListener('submit', analyze);
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
   stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drop'); });
   stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
