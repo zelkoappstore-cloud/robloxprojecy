@@ -224,6 +224,17 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     </div>
 
     <div class="group">
+      <span class="label">Bébés araignées</span>
+      <div class="row" id="babies">
+        <button type="button" data-b="0" aria-pressed="false">0</button>
+        <button type="button" data-b="2" aria-pressed="false">2</button>
+        <button type="button" data-b="4" aria-pressed="true">4</button>
+        <button type="button" data-b="6" aria-pressed="false">6</button>
+      </div>
+      <p class="note">Les bébés cherchent avec leur mère : plus curieux, ils explorent ailleurs. Quand l’un trouve, il pose sa patte dessus et la mère accourt.</p>
+    </div>
+
+    <div class="group">
       <span class="label">Vitesse</span>
       <div class="row" id="speeds">
         <button type="button" data-s="1" aria-pressed="true">×1</button>
@@ -359,12 +370,12 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
   function afterRender() {
     buildWords();
     memory.clear();
-    Q = null; state = 'idle'; S.target = null;
+    Q = null; idleAll();
     hits([]);
     $('think').textContent = 'Je regarde autour de moi.';
     setAnswer('…', pages ? 'Pose ta question.' : 'Elle cherche encore.', false);
     if (!W) return;
-    fit(); measure(); placeLegs(); renderStats();
+    fit(); measure(); spiders.forEach(placeLegs); renderStats();
   }
 
   function renderPage(i) {
@@ -873,19 +884,41 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
   }
 
   // --- Araignée ---
-  let W = 0, H = 0, u = 1, speed = 1, Q = null, state = 'idle', steps = 0, path = [], recent = [], wait = 0;
-  const S = { x: 0, y: 0, vx: 0, vy: 0, rot: 0, anchorX: 0, target: null, drag: { x: 0, y: 0 }, dragAt: 0 };
-  const legs = [];
-  for (const side of [1, -1]) ANGLES.forEach((deg, i) => legs.push({
-    side, attach: -0.38 + i * 0.19, group: (i + (side === 1 ? 0 : 1)) % 2,
-    ang: (side === 1 ? deg : 180 - deg) * Math.PI / 180, foot: { x: 0, y: 0 }, from: null, to: null, t: 1, word: null, pinned: false
-  }));
+  // --- Araignées : la mère et ses bébés partagent la même mémoire (Q) ---
+  let W = 0, H = 0, u = 1, speed = 1, Q = null;
+  const ANG_MOM = [-75, -42, -12, 22, 58], ANG_BABY = [-70, -25, 15, 55];
 
-  const dims = () => ({ bw: 11 * u, bh: 34 * u, coxa: 7 * u, femur: 44 * u, tibia: 50 * u, home: 66 * u });
+  function makeSpider(k, baby, n) {
+    const sp = { k, baby, n, x: 0, y: 0, vx: 0, vy: 0, rot: 0, anchorX: 0, target: null, drag: { x: 0, y: 0 }, dragAt: 0, state: 'idle', steps: 0, path: [], recent: [], wait: 0, legs: [] };
+    const angs = baby ? ANG_BABY : ANG_MOM, gap = 0.76 / (angs.length - 1);
+    for (const side of [1, -1]) angs.forEach((deg, i) => sp.legs.push({
+      side, attach: -0.38 + i * gap, group: (i + (side === 1 ? 0 : 1)) % 2,
+      ang: (side === 1 ? deg : 180 - deg) * Math.PI / 180, foot: { x: 0, y: 0 }, from: null, to: null, t: 1, word: null, pinned: false
+    }));
+    return sp;
+  }
+  const mom = makeSpider(1, false, 0);
+  let spiders = [mom];
+  const allLegs = () => spiders.flatMap(s => s.legs);
+
+  function setBabies(n) {
+    for (const b of spiders.slice(1)) b.legs.forEach(lift);
+    spiders = [mom];
+    for (let i = 1; i <= n; i++) {
+      const b = makeSpider(0.42, true, i);
+      b.x = Math.min(W - 20, Math.max(20, mom.x + (Math.random() - 0.5) * W * 0.5));
+      b.y = Math.min(H - 20, mom.y + 30 + Math.random() * 60);
+      spiders.push(b);
+    }
+    if (!W) return;
+    for (const b of spiders.slice(1)) { placeLegs(b); if (Q) startEpisode(b); }
+  }
+
+  const dims = sp => { const s = u * sp.k; return { bw: 11 * s, bh: 34 * s, coxa: 7 * s, femur: 44 * s, tibia: 50 * s, home: 66 * s }; };
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-  const toWorld = (lx, ly) => {
-    const c = Math.cos(S.rot), s = Math.sin(S.rot);
-    return { x: S.x + lx * c - ly * s, y: S.y + lx * s + ly * c };
+  const toWorld = (sp, lx, ly) => {
+    const c = Math.cos(sp.rot), s = Math.sin(sp.rot);
+    return { x: sp.x + lx * c - ly * s, y: sp.y + lx * s + ly * c };
   };
 
   function fit() {
@@ -904,26 +937,27 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     }
   }
 
-  function legFrame(leg) {
-    const d = dims();
-    const hip = toWorld(leg.side * d.bw / 2, leg.attach * d.bh);
-    const a = leg.ang + S.rot, dx = Math.cos(a), dy = Math.sin(a);
+  function legFrame(sp, leg) {
+    const d = dims(sp);
+    const hip = toWorld(sp, leg.side * d.bw / 2, leg.attach * d.bh);
+    const a = leg.ang + sp.rot, dx = Math.cos(a), dy = Math.sin(a);
     return { d, hip, coxaEnd: { x: hip.x + dx * d.coxa, y: hip.y + dy * d.coxa }, home: { x: hip.x + dx * d.home, y: hip.y + dy * d.home } };
   }
 
-  function footTarget(leg, f) {
-    const reach = f.d.femur + f.d.tibia - 6 * u;
-    let best = null, bestD = 34 * u;
+  function footTarget(sp, leg, f) {
+    const reach = f.d.femur + f.d.tibia - 6 * u * sp.k;
+    const taken = new Set(allLegs().filter(l => l !== leg && l.word).map(l => l.word));
+    let best = null, bestD = 34 * u * sp.k;
     for (const w of words) {
-      if (!w.vis) continue;
+      if (!w.vis || taken.has(w)) continue;
       const dh = dist(w, f.home);
-      if (dh >= bestD || dist(w, f.coxaEnd) > reach || legs.some(l => l !== leg && l.word === w)) continue;
+      if (dh >= bestD || dist(w, f.coxaEnd) > reach) continue;
       best = w; bestD = dh;
     }
     return best ? { x: best.x, y: best.y, word: best } : { x: f.home.x, y: f.home.y, word: null };
   }
 
-  function plant(leg) {
+  function plant(sp, leg) {
     leg.foot = { x: leg.to.x, y: leg.to.y };
     leg.word = leg.to.word;
     if (!leg.word) return;
@@ -931,25 +965,23 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     el.classList.remove('seen');
     el.classList.add('grab', 'hit');
     setTimeout(() => el.classList.remove('hit'), 400);
-    if (state === 'run' && Q.answer.has(leg.word.i)) found(leg.word);
+    if (sp.state === 'run' && Q.answer.has(leg.word.i)) found(sp, leg.word);
   }
 
   function lift(leg) {
     if (!leg.word) return;
     const el = leg.word.el;
     leg.word = null;
-    if (legs.some(l => l.word && l.word.el === el)) return;
+    if (allLegs().some(l => l.word && l.word.el === el)) return;
     el.classList.remove('grab');
     el.classList.add('seen');
     setTimeout(() => { if (!el.classList.contains('grab')) el.classList.remove('seen'); }, 2000);
   }
 
-  function placeLegs() {
-    doc.querySelectorAll('.w.grab, .w.seen, .w.hit').forEach(el => el.classList.remove('grab', 'seen', 'hit'));
-    for (const leg of legs) { leg.word = null; leg.pinned = false; leg.to = footTarget(leg, legFrame(leg)); leg.t = 1; plant(leg); }
+  function placeLegs(sp) {
+    for (const leg of sp.legs) { lift(leg); leg.pinned = false; leg.to = footTarget(sp, leg, legFrame(sp, leg)); leg.t = 1; plant(sp, leg); }
   }
 
-  // --- Apprentissage ---
   const exploration = () => Math.max(0.03, 0.3 * Math.pow(0.7, Q ? Q.wins : 0));
 
   function think(w, why) {
@@ -962,23 +994,26 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
         path: 'Je suis un chemin qui a déjà marché.',
         ahead: 'Je vois des mots utiles plus loin, j’y vais.',
         map: 'Je me souviens où était l’info.',
-        cur: 'Je vais voir un mot que je ne connais pas encore.'
+        cur: 'Je vais voir un mot que personne n’a encore visité.'
       }[top];
     }
     if ($('think').textContent !== t) $('think').textContent = t;
   }
 
-  function chooseNext() {
-    let R = Math.max(110, Math.min(W, H) * 0.22), cand = [];
+  // Les bébés sont plus curieux et explorent davantage ; personne ne vise le même mot qu'une autre araignée
+  function chooseNext(sp) {
+    let R = Math.max(110, Math.min(W, H) * 0.22) * (sp.baby ? 0.8 : 1), cand = [];
+    const aimed = new Set(spiders.filter(o => o !== sp && o.target).map(o => o.target));
     while (!cand.length && R < Math.max(W, H) * 2) {
-      cand = words.filter(w => w.vis && !recent.includes(w.i) && dist(w, S) < R && dist(w, S) > 4 * u);
+      cand = words.filter(w => w.vis && !sp.recent.includes(w.i) && !aimed.has(w) && dist(w, sp) < R && dist(w, sp) > 4 * u * sp.k);
       R *= 1.5;
     }
-    if (!cand.length) return endEpisode(false);
+    if (!cand.length) return endEpisode(sp, false);
     const look = R / 1.5, diag = Math.hypot(W, H);
     const memW = Q.mem != null ? words[Q.mem] : null, conf = Math.min(1, Q.wins / 2);
+    const eps = sp.baby ? Math.min(0.5, exploration() * 2 + 0.1) : exploration();
     let pick, why;
-    if (Math.random() < exploration()) { pick = cand[Math.random() * cand.length | 0]; why = 'explore'; }
+    if (Math.random() < eps) { pick = cand[Math.random() * cand.length | 0]; why = 'explore'; }
     else {
       let m = -Infinity;
       for (const w of cand) {
@@ -986,60 +1021,60 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
         for (const o of words) if (o.vis && o !== w && dist(o, w) < look) ahead = Math.max(ahead, Q.V[o.i] + Q.P[o.i]);
         const parts = {
           read: Q.P[w.i], path: Q.V[w.i], ahead: 0.5 * ahead,
-          map: memW ? conf * 0.8 * (1 - dist(w, memW) / diag) : 0,
-          cur: 0.12 / Math.sqrt(1 + Q.N[w.i])
+          map: memW ? conf * (sp.baby ? 0.4 : 0.8) * (1 - dist(w, memW) / diag) : 0,
+          cur: (sp.baby ? 0.3 : 0.12) / Math.sqrt(1 + Q.N[w.i])
         };
         const s = parts.read + parts.path + parts.ahead + parts.map + parts.cur + Math.random() * 1e-3;
         if (s > m) { m = s; pick = w; why = parts; }
       }
     }
-    think(pick, why);
+    if (sp === mom && !mom.called) think(pick, why);
     Q.N[pick.i]++;
-    S.target = pick;
-    recent.push(pick.i); if (recent.length > 4) recent.shift();
-    path.push(pick.i);
-    steps++;
+    sp.target = pick;
+    sp.recent.push(pick.i); if (sp.recent.length > 4) sp.recent.shift();
+    sp.path.push(pick.i);
+    sp.steps++;
   }
 
-  function learn() {
+  function learn(sp) {
     const met = new Set();
-    const r = path.map(i => {
+    const r = sp.path.map(i => {
       if (Q.answer.has(i)) return 1;
       if (Q.clue[i] && !met.has(i)) { met.add(i); return 0.3; }
       return 0;
     });
     let G = 0;
-    for (let t = path.length - 1; t >= 0; t--) {
+    for (let t = sp.path.length - 1; t >= 0; t--) {
       G = r[t] + GAMMA * G;
-      const i = path[t];
+      const i = sp.path[t];
       Q.V[i] = Math.min(1.5, Q.V[i] + ALPHA * (G - Q.V[i]));
     }
     paintHeat();
   }
 
-  function endEpisode(ok) {
-    state = 'done';
-    S.target = null;
-    wait = ok ? 2.2 : 0.5;
+  function endEpisode(sp, ok) {
+    sp.state = 'done';
+    sp.target = null;
+    sp.wait = ok ? 2.2 : 0.5;
     Q.ep++;
-    Q.hist.push({ steps, ok });
-    if (ok) { Q.best = Math.min(Q.best, steps); Q.wins++; }
-    learn();
+    Q.hist.push({ steps: sp.steps, ok, baby: sp.baby });
+    if (ok) { Q.best = Math.min(Q.best, sp.steps); Q.wins++; }
+    learn(sp);
     renderStats();
   }
 
   // Le corps recule pour ne pas cacher le mot, et la patte tournée vers lui s'étire pour s'y poser
-  function pinLegOn(w) {
+  function pinLegOn(sp, w) {
     const sr = stage.getBoundingClientRect(), b = w.el.getBoundingClientRect();
     w.x = b.left - sr.left + b.width / 2; w.y = b.top - sr.top + b.height / 2;
-    const bx = S.x < w.x ? -0.45 : 0.45, by = w.y < H / 2 ? 1 : -1, bl = Math.hypot(bx, by);
+    const bx = sp.x < w.x ? -0.45 : 0.45, by = w.y < H / 2 ? 1 : -1, bl = Math.hypot(bx, by);
     const back = { x: bx / bl, y: by / bl };
-    const reach = (dims().femur + dims().tibia) * 0.85;
-    S.target = { x: w.x + back.x * reach, y: w.y + back.y * reach };
+    const d = dims(sp), reach = (d.femur + d.tibia) * 0.85;
+    sp.target = { x: w.x + back.x * reach, y: w.y + back.y * reach };
     const want = Math.atan2(-back.y, -back.x);
     let leg = null, bestD = Infinity;
-    for (const l of legs) {
-      const dd = Math.abs(Math.atan2(Math.sin(l.ang + S.rot - want), Math.cos(l.ang + S.rot - want)));
+    for (const l of sp.legs) {
+      const dd = Math.abs(Math.atan2(Math.sin(l.ang + sp.rot - want), Math.cos(l.ang + sp.rot - want)));
       if (dd < bestD) { bestD = dd; leg = l; }
     }
     if (leg.word !== w) {
@@ -1051,28 +1086,39 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     leg.pinned = true;
   }
 
-  function found(w) {
-    if (path[path.length - 1] !== w.i) path.push(w.i);
+  function found(sp, w) {
+    if (sp.path[sp.path.length - 1] !== w.i) sp.path.push(w.i);
     Q.mem = w.i;
-    $('think').textContent = 'Trouvé ! Je pose ma patte dessus.';
+    $('think').textContent = sp.baby ? `Bébé ${sp.n} a trouvé « ${w.text} » ! Maman arrive.` : (mom.called ? 'Mon bébé avait raison, c’est ici !' : 'Trouvé ! Je pose ma patte dessus.');
     Q.answer.forEach(i => words[i].el.classList.add('ans'));
     const res = Q.extract(w);
-    setAnswer(res.text, res.src, true);
-    endEpisode(true);
-    pinLegOn(w);
+    setAnswer(res.text, res.src + (sp.baby ? ` · trouvé par bébé ${sp.n}` : ''), true);
+    endEpisode(sp, true);
+    pinLegOn(sp, w);
+    if (sp.baby && mom.state === 'run') {
+      mom.called = true;
+      mom.target = w;
+      if (mom.path[mom.path.length - 1] !== w.i) mom.path.push(w.i);
+    }
   }
 
-  function startEpisode() {
+  // La mère repart du haut ; les bébés repartent d'où ils sont
+  function startEpisode(sp) {
     if (!W || !H || !Q) return;
-    doc.querySelectorAll('.w.ans').forEach(el => el.classList.remove('ans'));
-    S.x = W * (0.15 + Math.random() * 0.7); S.y = H * 0.1 + 20 * u;
-    S.vx = S.vy = 0; S.anchorX = S.x;
-    S.drag = { x: S.x, y: 0 };
-    steps = 0; path = []; recent = [];
-    placeLegs();
-    state = 'run';
-    chooseNext();
+    if (sp === mom) {
+      doc.querySelectorAll('.w.ans').forEach(el => el.classList.remove('ans'));
+      mom.x = W * (0.15 + Math.random() * 0.7); mom.y = H * 0.1 + 20 * u;
+      mom.vx = mom.vy = 0; mom.anchorX = mom.x;
+      mom.drag = { x: mom.x, y: 0 };
+      mom.called = false;
+    }
+    sp.steps = 0; sp.path = []; sp.recent = [];
+    placeLegs(sp);
+    sp.state = 'run';
+    chooseNext(sp);
   }
+  const startAll = () => spiders.forEach(startEpisode);
+  const idleAll = () => spiders.forEach(sp => { sp.state = 'idle'; sp.target = null; });
 
   function paintHeat() {
     for (const w of words) w.el.style.setProperty('--v', Q ? Math.min(1, Q.V[w.i]).toFixed(2) : 0);
@@ -1084,7 +1130,7 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     $('last').textContent = h.length ? (h[h.length - 1].ok ? h[h.length - 1].steps : 'raté') : '–';
     $('best').textContent = Q && Q.best < Infinity ? Q.best : '–';
     const e = Math.round(exploration() * 100);
-    $('explore').textContent = `Exploration ${e} % · elle choisit au hasard ${e} % du temps`;
+    $('explore').textContent = `Exploration de la mère ${e} % · les bébés explorent plus. Barres claires : essais des bébés.`;
     const r = spark.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
     spark.width = r.width * dpr; spark.height = r.height * dpr;
     sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1093,7 +1139,7 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     const last = h.slice(-40), bw = r.width / 40;
     last.forEach((ev, k) => {
       const bh = Math.max(2, (ev.steps / MAX_STEPS) * (r.height - 4));
-      sctx.fillStyle = ev.ok ? '#4fd6e3' : '#ec4d68';
+      sctx.fillStyle = !ev.ok ? '#ec4d68' : ev.baby ? '#a8d4ff' : '#4fd6e3';
       sctx.fillRect(k * bw + 1, r.height - 1 - bh, Math.max(1, bw - 2), bh);
     });
   }
@@ -1101,65 +1147,67 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
   function setQuery(q, button) {
     Q = q;
     document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
-    setAnswer('…', 'Elle cherche encore.', false);
+    setAnswer('…', 'Elles cherchent encore.', false);
     paintHeat();
     renderStats();
-    startEpisode();
+    startAll();
   }
 
   // --- Simulation ---
-  function update(dt) {
-    if (state === 'done') { wait -= dt; if (wait <= 0) startEpisode(); }
-    if (state === 'idle' && (!S.target || dist(S, S.target) < 5 * u)) {
-      const vis = words.filter(w => w.vis && dist(w, S) < 200);
-      S.target = vis.length ? vis[Math.random() * vis.length | 0] : null;
+  function update(sp, dt) {
+    if (sp.state === 'done') { sp.wait -= dt; if (sp.wait <= 0) startEpisode(sp); }
+    if (sp.state === 'idle' && (!sp.target || dist(sp, sp.target) < 5 * u * sp.k)) {
+      const vis = words.filter(w => w.vis && dist(w, sp) < 200);
+      sp.target = vis.length ? vis[Math.random() * vis.length | 0] : null;
     }
-    const maxSpeed = (reduced ? 70 : 140) * u * (state === 'idle' ? 0.4 : 1);
-    const tgt = S.target || S;
-    const dx = tgt.x - S.x, dy = tgt.y - S.y, d = Math.hypot(dx, dy) || 1;
-    const sp = maxSpeed * Math.min(1, d / (30 * u));
+    const maxSpeed = (reduced ? 70 : 140) * u * (sp.baby ? 0.75 : 1) * (sp.state === 'idle' ? 0.4 : 1) * (sp.called ? 1.6 : 1);
+    const tgt = sp.target || sp;
+    const dx = tgt.x - sp.x, dy = tgt.y - sp.y, d = Math.hypot(dx, dy) || 1;
+    const v = maxSpeed * Math.min(1, d / (30 * u * sp.k));
     const k = Math.min(1, dt * 5);
-    S.vx += (dx / d * sp - S.vx) * k;
-    S.vy += (dy / d * sp - S.vy) * k;
-    S.x += S.vx * dt; S.y += S.vy * dt;
-    S.rot += (Math.max(-0.3, Math.min(0.3, S.vx / maxSpeed * 0.25)) - S.rot) * Math.min(1, dt * 4);
-    S.anchorX += (S.x - S.anchorX) * Math.min(1, dt * 1.5);
-    S.dragAt -= dt;
-    if (S.dragAt <= 0) { S.drag = toWorld(0, dims().bh / 2); S.dragAt = 2.5; }
-
-    if (state === 'run' && S.target && d < 5 * u) {
-      if (Q.answer.has(S.target.i)) found(S.target);
-      else if (steps >= MAX_STEPS) endEpisode(false);
-      else chooseNext();
+    sp.vx += (dx / d * v - sp.vx) * k;
+    sp.vy += (dy / d * v - sp.vy) * k;
+    sp.x += sp.vx * dt; sp.y += sp.vy * dt;
+    sp.rot += (Math.max(-0.3, Math.min(0.3, sp.vx / maxSpeed * 0.25)) - sp.rot) * Math.min(1, dt * 4);
+    if (sp === mom) {
+      mom.anchorX += (mom.x - mom.anchorX) * Math.min(1, dt * 1.5);
+      mom.dragAt -= dt;
+      if (mom.dragAt <= 0) { mom.drag = toWorld(mom, 0, dims(mom).bh / 2); mom.dragAt = 2.5; }
     }
 
-    for (const leg of legs) {
-      const f = legFrame(leg);
+    if (sp.state === 'run' && sp.target && d < 5 * u * sp.k) {
+      if (Q.answer.has(sp.target.i)) found(sp, sp.target);
+      else if (sp.steps >= MAX_STEPS) endEpisode(sp, false);
+      else chooseNext(sp);
+    }
+
+    for (const leg of sp.legs) {
+      const f = legFrame(sp, leg);
       if (leg.t < 1) {
-        leg.t = Math.min(1, leg.t + dt / 0.12);
+        leg.t = Math.min(1, leg.t + dt / (sp.baby ? 0.09 : 0.12));
         const e = leg.t * leg.t * (3 - 2 * leg.t);
         leg.foot = { x: leg.from.x + (leg.to.x - leg.from.x) * e, y: leg.from.y + (leg.to.y - leg.from.y) * e };
-        if (leg.t === 1) plant(leg);
+        if (leg.t === 1) plant(sp, leg);
         continue;
       }
       if (leg.pinned) continue;
-      const tooFar = dist(leg.foot, f.coxaEnd) > f.d.femur + f.d.tibia - 2 * u;
-      if (dist(leg.foot, f.home) < 38 * u && !tooFar) continue;
-      if (legs.some(l => l.t < 1 && l.group !== leg.group) && !tooFar) continue;
+      const tooFar = dist(leg.foot, f.coxaEnd) > f.d.femur + f.d.tibia - 2 * u * sp.k;
+      if (dist(leg.foot, f.home) < 38 * u * sp.k && !tooFar) continue;
+      if (sp.legs.some(l => l.t < 1 && l.group !== leg.group) && !tooFar) continue;
       lift(leg);
       leg.from = { ...leg.foot };
-      leg.to = footTarget(leg, f);
+      leg.to = footTarget(sp, leg, f);
       leg.t = 0;
     }
   }
 
-  function knee(a, b, l1, l2) {
+  function knee(sp, a, b, l1, l2) {
     const d = Math.min(Math.max(dist(a, b), Math.abs(l1 - l2) + 1), l1 + l2 - 0.5);
     const base = Math.atan2(b.y - a.y, b.x - a.x);
     const A = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
     const k1 = { x: a.x + Math.cos(base + A) * l1, y: a.y + Math.sin(base + A) * l1 };
     const k2 = { x: a.x + Math.cos(base - A) * l1, y: a.y + Math.sin(base - A) * l1 };
-    const k = dist(k1, S) > dist(k2, S) ? k1 : k2;
+    const k = dist(k1, sp) > dist(k2, sp) ? k1 : k2;
     const ang = Math.atan2(b.y - k.y, b.x - k.x);
     return { k, foot: { x: k.x + Math.cos(ang) * l2, y: k.y + Math.sin(ang) * l2 } };
   }
@@ -1169,54 +1217,65 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     ctx.fillStyle = fill; ctx.fill();
   }
 
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    const d = dims();
-    const top = toWorld(0, -d.bh / 2), bottom = toWorld(0, d.bh / 2);
-
-    const barW = Math.min(180, W * 0.3), barH = 20;
-    ctx.fillStyle = C.silk;
-    ctx.fillRect(S.anchorX - barW / 2, 0, barW, barH);
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = C.silk; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(S.anchorX, barH); ctx.lineTo(top.x, top.y); ctx.stroke();
-    ctx.strokeStyle = 'rgba(216, 31, 79, 0.7)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(S.drag.x, S.drag.y); ctx.stroke();
-
-    if (S.target && state === 'run') {
+  function drawSpider(sp) {
+    const d = dims(sp);
+    if (sp.target && sp.state === 'run') {
       ctx.setLineDash([3, 4]);
-      ctx.strokeStyle = 'rgba(79, 214, 227, 0.5)';
-      ctx.beginPath(); ctx.moveTo(S.x, S.y); ctx.lineTo(S.target.x, S.target.y); ctx.stroke();
+      ctx.strokeStyle = sp.baby ? 'rgba(168, 212, 255, 0.35)' : 'rgba(79, 214, 227, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(sp.target.x, sp.target.y); ctx.stroke();
       ctx.setLineDash([]);
     }
-
-    const lw = Math.max(1, 1.2 * u), jr = Math.max(1.3, 1.4 * u);
+    const lw = Math.max(sp.baby ? 0.8 : 1, 1.2 * u * Math.sqrt(sp.k)), jr = Math.max(sp.baby ? 0.9 : 1.3, 1.4 * u * Math.sqrt(sp.k));
     ctx.lineJoin = 'round';
-    for (const leg of legs) {
-      const f = legFrame(leg);
-      const { k, foot } = knee(f.coxaEnd, leg.foot, d.femur, d.tibia);
+    for (const leg of sp.legs) {
+      const f = legFrame(sp, leg);
+      const { k, foot } = knee(sp, f.coxaEnd, leg.foot, d.femur, d.tibia);
       ctx.beginPath(); ctx.moveTo(f.hip.x, f.hip.y); ctx.lineTo(f.coxaEnd.x, f.coxaEnd.y); ctx.lineTo(k.x, k.y); ctx.lineTo(foot.x, foot.y);
       const held = leg.pinned && leg.t >= 1;
       ctx.strokeStyle = held ? '#7ef0a0' : C.leg; ctx.lineWidth = held ? lw * 1.6 : lw; ctx.stroke();
       if (held) {
-        ctx.beginPath(); ctx.arc(foot.x, foot.y, (6 + 2 * Math.sin(performance.now() / 120)) * u, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(foot.x, foot.y, (6 + 2 * Math.sin(performance.now() / 120)) * u * Math.sqrt(sp.k), 0, Math.PI * 2);
         ctx.strokeStyle = '#7ef0a0'; ctx.lineWidth = 1.2; ctx.stroke();
       }
       dot(f.coxaEnd, jr, C.joint);
       dot(k, jr, C.joint);
       dot(foot, leg.t < 1 ? jr * 1.5 : jr * 1.15, C.joint);
     }
-
     ctx.save();
-    ctx.translate(S.x, S.y); ctx.rotate(S.rot);
+    ctx.translate(sp.x, sp.y); ctx.rotate(sp.rot);
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-d.bw / 2, -d.bh / 2, d.bw, d.bh, 2 * u); else ctx.rect(-d.bw / 2, -d.bh / 2, d.bw, d.bh);
+    if (ctx.roundRect) ctx.roundRect(-d.bw / 2, -d.bh / 2, d.bw, d.bh, 2 * u * sp.k); else ctx.rect(-d.bw / 2, -d.bh / 2, d.bw, d.bh);
     ctx.fillStyle = C.body; ctx.fill();
-    ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = C.line; ctx.lineWidth = sp.baby ? 1 : 1.5; ctx.stroke();
     ctx.beginPath(); ctx.arc(0, d.bh / 2 - d.bw * 0.55, d.bw * 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = C.eye; ctx.fill();
-    ctx.strokeStyle = C.eyeRim; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = sp.baby ? C.eyeRim : C.eye; ctx.fill();
+    if (!sp.baby) { ctx.strokeStyle = C.eyeRim; ctx.lineWidth = 1; ctx.stroke(); }
     ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const d = dims(mom);
+    const top = toWorld(mom, 0, -d.bh / 2), bottom = toWorld(mom, 0, d.bh / 2);
+    const barW = Math.min(180, W * 0.3), barH = 20;
+    ctx.fillStyle = C.silk;
+    ctx.fillRect(mom.anchorX - barW / 2, 0, barW, barH);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = C.silk; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mom.anchorX, barH); ctx.lineTo(top.x, top.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(216, 31, 79, 0.7)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(mom.drag.x, mom.drag.y); ctx.stroke();
+    // Chaque bébé reste relié à sa mère par un fil de soie
+    ctx.strokeStyle = 'rgba(255, 46, 147, 0.35)'; ctx.lineWidth = 0.8;
+    for (const b of spiders.slice(1)) {
+      const bt = toWorld(b, 0, -dims(b).bh / 2);
+      ctx.beginPath(); ctx.moveTo(bottom.x, bottom.y);
+      ctx.quadraticCurveTo((bottom.x + bt.x) / 2, Math.max(bottom.y, bt.y) + 30, bt.x, bt.y);
+      ctx.stroke();
+    }
+    for (const b of spiders.slice(1)) drawSpider(b);
+    drawSpider(mom);
   }
 
   function resize() {
@@ -1227,21 +1286,20 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
     cv.width = W * dpr; cv.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     u = Math.max(0.8, Math.min(W, H) / 520) * 1.35;
-    if (first) { S.x = S.anchorX = W / 2; S.y = H * 0.4; }
+    if (first) { mom.x = mom.anchorX = W / 2; mom.y = H * 0.4; setBabies(spiders.length - 1 || 4); }
     fit(); drawChart(); measure(); renderStats();
-    if (Q) startEpisode(); else placeLegs();
+    if (Q) startAll(); else spiders.forEach(placeLegs);
   }
 
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    for (let k = 0; k < speed; k++) update(dt);
+    for (let k = 0; k < speed; k++) for (const sp of spiders) update(sp, dt);
     draw();
     requestAnimationFrame(frame);
   }
 
-  // --- Contrôles ---
   PRESETS.forEach(p => {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = p.label; b.setAttribute('aria-pressed', 'false');
@@ -1266,6 +1324,13 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
   stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
   stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('drop'); handleFile(e.dataTransfer.files[0]); });
 
+  $('babies').addEventListener('click', e => {
+    const b = e.target.closest('[data-b]');
+    if (!b) return;
+    setBabies(+b.dataset.b);
+    document.querySelectorAll('[data-b]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
   $('speeds').addEventListener('click', e => {
     const b = e.target.closest('[data-s]');
     if (!b) return;
@@ -1276,7 +1341,7 @@ select { font: inherit; color: var(--box); background: var(--bg); border: 1px so
   $('reset').addEventListener('click', () => {
     if (!Q) return;
     Q.V.fill(0); Q.N.fill(0); Q.ep = 0; Q.wins = 0; Q.mem = null; Q.hist = []; Q.best = Infinity;
-    paintHeat(); renderStats(); startEpisode();
+    paintHeat(); renderStats(); startAll();
   });
 
   showDemo();
