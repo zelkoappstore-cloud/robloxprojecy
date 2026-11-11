@@ -1,0 +1,325 @@
+<title>Araignée Crawler</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Plein écran : un document sombre dessous, l'araignée dessinée sur un canvas par-dessus, un petit panneau en bas à droite */
+:root {
+  --bg: #07090b;
+  --ink: #9aa3ac;
+  --ink-dim: #3a4249;
+  --box: #eef3f6;
+  --hit: #4fd6e3;
+  --panel: #0e1317;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); overflow: hidden; }
+#stage { position: fixed; inset: 0; overflow: hidden; cursor: crosshair; touch-action: none; }
+#doc {
+  position: absolute; inset: 0; max-width: 960px; margin: 0 auto;
+  padding-block: 76px 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: clamp(14px, 1.55vw, 18px); line-height: 2.15;
+  user-select: none;
+}
+#doc .tag { font-family: var(--mono); font-size: 0.72em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+#doc p { margin: 0 0 0.9em; }
+table { width: 100%; border-collapse: collapse; margin-top: 1.4em; font-family: var(--mono); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+th, td { border-top: 1px solid var(--ink-dim); padding: 0.2em 0.4em; text-align: right; font-weight: 400; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-dim); }
+.w { border-radius: 3px; outline: 1.5px solid transparent; outline-offset: 2px; transition: outline-color 0.6s, background-color 0.3s, color 0.3s; }
+.w.seen { outline-color: rgba(238, 243, 246, 0.28); }
+.w.grab { outline-color: var(--box); color: var(--box); transition-duration: 0.1s; }
+.w.hit { background-color: rgba(79, 214, 227, 0.55); color: #fff; }
+#cv { position: absolute; inset: 0; pointer-events: none; }
+#hud {
+  position: fixed; z-index: 2; width: min(300px, calc(100% - 32px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--panel); border: 1px solid var(--ink-dim); border-radius: 8px;
+  padding: 12px 14px; font-family: var(--mono); font-size: 12px; display: grid; gap: 8px;
+}
+#hud h1 { margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--box); }
+#hud .row { display: flex; justify-content: space-between; color: var(--ink); }
+#count { color: var(--hit); font-variant-numeric: tabular-nums; }
+#chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+#chips span { border: 1px solid var(--ink-dim); border-radius: 4px; padding: 1px 6px; color: var(--box); }
+#hud .hint { color: var(--ink-dim); }
+</style>
+
+<div id="stage" aria-label="Araignée qui explore un document">
+  <div id="doc">
+    <p class="tag" data-w>Rapport financier · exercice 2026 · document fictif</p>
+    <p data-w>Au premier semestre de l'exercice 2026, le chiffre d'affaires a progressé de 14 % grâce à la hausse des contrats de location de centres de données. Les garanties accordées aux partenaires couvrent le risque de défaut sur une durée de trois à cinq ans.</p>
+    <p data-w>Les revenus locatifs sont comptabilisés de manière linéaire sur la durée du bail. Les actions des sociétés cotées détenues en portefeuille sont évaluées à leur juste valeur, et les variations sont reconnues en autres produits.</p>
+    <p data-w>Les charges d'exploitation restent stables. La trésorerie disponible au 30 juin 2026 permet de financer les investissements prévus sans nouvel emprunt.</p>
+    <table>
+      <tr><th data-w>(en millions)</th><th data-w>30 juin 2026</th><th data-w>31 déc. 2025</th></tr>
+      <tr><td data-w>Revenus locatifs</td><td data-w>2&#8239;162</td><td data-w>1&#8239;948</td></tr>
+      <tr><td data-w>Garanties accordées</td><td data-w>2&#8239;262</td><td data-w>2&#8239;105</td></tr>
+      <tr><td data-w>Trésorerie disponible</td><td data-w>4&#8239;870</td><td data-w>4&#8239;312</td></tr>
+      <tr><td data-w>Total des actifs</td><td data-w>18&#8239;405</td><td data-w>16&#8239;990</td></tr>
+    </table>
+  </div>
+  <canvas id="cv"></canvas>
+</div>
+
+<aside id="hud">
+  <h1>Aperçu · araignée v0</h1>
+  <div class="row"><span>Mots touchés</span><span id="count">0</span></div>
+  <div id="chips"></div>
+  <div class="hint">Clique ou touche le document pour la guider.</div>
+</aside>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const countEl = document.getElementById('count');
+  const chipsEl = document.getElementById('chips');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const C = { leg: '#bfeadb', edge: '#14211d', joint: '#ec4d68', silk: '#ff2e93', silk2: '#d81f4f', body: '#0b1216', line: '#eef3f6', eye: '#3b8fe6', eyeRim: '#a8d4ff' };
+  const ANGLES = [-75, -42, -12, 22, 58];
+
+  let W = 0, H = 0, u = 1, words = [];
+  const S = { x: 0, y: 0, vx: 0, vy: 0, rot: 0, tx: 0, ty: 0, anchorX: 0, next: 0, drag: { x: 0, y: 0 }, dragAt: 0 };
+  const legs = [];
+  const seen = new Set();
+
+  // Découpe chaque texte en mots cliquables par l'araignée
+  document.querySelectorAll('[data-w]').forEach(el => {
+    const parts = el.textContent.split(/([ \n\t]+)/);
+    el.textContent = '';
+    for (const p of parts) {
+      if (!p || /^[ \n\t]+$/.test(p)) { el.append(p); continue; }
+      const s = document.createElement('span');
+      s.className = 'w';
+      s.textContent = p;
+      el.append(s);
+    }
+  });
+
+  const dims = () => ({ bw: 24 * u, bh: 74 * u, coxa: 16 * u, femur: 100 * u, tibia: 110 * u, home: 150 * u });
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const toWorld = (lx, ly) => {
+    const c = Math.cos(S.rot), s = Math.sin(S.rot);
+    return { x: S.x + lx * c - ly * s, y: S.y + lx * s + ly * c };
+  };
+
+  function measure() {
+    const r = stage.getBoundingClientRect();
+    words = [...document.querySelectorAll('.w')].map(el => {
+      const b = el.getBoundingClientRect();
+      return { el, x: b.left - r.left + b.width / 2, y: b.top - r.top + b.height / 2, w: b.width, text: el.textContent };
+    }).filter(o => o.w > 0 && o.y > 0 && o.y < H);
+  }
+
+  function legFrame(leg) {
+    const d = dims();
+    const hip = toWorld(leg.side * d.bw / 2, leg.attach * d.bh);
+    const a = leg.ang + S.rot;
+    const dir = { x: Math.cos(a), y: Math.sin(a) };
+    const coxaEnd = { x: hip.x + dir.x * d.coxa, y: hip.y + dir.y * d.coxa };
+    const home = { x: hip.x + dir.x * d.home, y: hip.y + dir.y * d.home };
+    return { hip, coxaEnd, home, d };
+  }
+
+  function pickTarget(leg, f) {
+    const reach = f.d.femur + f.d.tibia - 10 * u;
+    let best = null, bestD = 70 * u;
+    for (const w of words) {
+      const dh = dist(w, f.home);
+      if (dh >= bestD || dist(w, f.coxaEnd) > reach) continue;
+      if (legs.some(l => l !== leg && l.word === w)) continue;
+      best = w; bestD = dh;
+    }
+    return best ? { x: best.x, y: best.y, word: best } : { x: f.home.x, y: f.home.y, word: null };
+  }
+
+  function collect(text) {
+    const t = text.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (t.length < 4 || seen.has(t.toLowerCase())) return;
+    seen.add(t.toLowerCase());
+    countEl.textContent = seen.size;
+    const chip = document.createElement('span');
+    chip.textContent = t;
+    chipsEl.prepend(chip);
+    while (chipsEl.children.length > 8) chipsEl.lastChild.remove();
+  }
+
+  function plant(leg) {
+    leg.foot = { x: leg.to.x, y: leg.to.y };
+    leg.word = leg.to.word;
+    if (!leg.word) return;
+    const el = leg.word.el;
+    el.classList.remove('seen');
+    el.classList.add('grab', 'hit');
+    setTimeout(() => el.classList.remove('hit'), 450);
+    collect(leg.word.text);
+  }
+
+  function lift(leg) {
+    if (!leg.word) return;
+    const el = leg.word.el;
+    leg.word = null;
+    if (legs.some(l => l.word && l.word.el === el)) return;
+    el.classList.remove('grab');
+    el.classList.add('seen');
+    setTimeout(() => { if (!el.classList.contains('grab')) el.classList.remove('seen'); }, 2600);
+  }
+
+  function placeAll() {
+    document.querySelectorAll('.w.grab, .w.seen').forEach(el => el.classList.remove('grab', 'seen', 'hit'));
+    for (const leg of legs) {
+      leg.word = null;
+      leg.to = pickTarget(leg, legFrame(leg));
+      leg.t = 1;
+      plant(leg);
+    }
+  }
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    W = stage.clientWidth; H = stage.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    u = Math.min(W, H) / 520;
+    if (!legs.length) {
+      S.x = S.tx = S.anchorX = W * 0.5; S.y = S.ty = H * 0.45;
+      S.drag = { x: W * 0.8, y: H };
+      for (const side of [1, -1]) ANGLES.forEach((deg, i) => legs.push({
+        side, attach: -0.38 + i * 0.19, group: (i + (side === 1 ? 0 : 1)) % 2,
+        ang: (side === 1 ? deg : 180 - deg) * Math.PI / 180, foot: null, from: null, to: null, t: 1, word: null
+      }));
+    }
+    S.x = Math.min(S.x, W); S.y = Math.min(S.y, H);
+    measure();
+    placeAll();
+  }
+
+  function update(dt, now) {
+    const maxSpeed = (reduced ? 25 : 55) * u;
+    if (now > S.next || dist(S, { x: S.tx, y: S.ty }) < 20 * u) {
+      S.tx = W * (0.18 + Math.random() * 0.64);
+      S.ty = H * (0.22 + Math.random() * 0.56);
+      S.next = now + 4000 + Math.random() * 3000;
+    }
+    const dx = S.tx - S.x, dy = S.ty - S.y, d = Math.hypot(dx, dy) || 1;
+    const sp = maxSpeed * Math.min(1, d / (60 * u));
+    const k = Math.min(1, dt * 2);
+    S.vx += (dx / d * sp - S.vx) * k;
+    S.vy += (dy / d * sp - S.vy) * k;
+    S.x += S.vx * dt; S.y += S.vy * dt;
+    S.rot += (Math.max(-0.3, Math.min(0.3, S.vx / maxSpeed * 0.25)) - S.rot) * Math.min(1, dt * 3);
+    S.anchorX += (S.x - S.anchorX) * Math.min(1, dt * 1.2);
+    if (now > S.dragAt) { S.drag = toWorld(0, dims().bh / 2); S.dragAt = now + 3500; }
+
+    for (const leg of legs) {
+      const f = legFrame(leg);
+      if (leg.t < 1) {
+        leg.t = Math.min(1, leg.t + dt / 0.2);
+        const e = leg.t * leg.t * (3 - 2 * leg.t);
+        leg.foot = { x: leg.from.x + (leg.to.x - leg.from.x) * e, y: leg.from.y + (leg.to.y - leg.from.y) * e };
+        if (leg.t === 1) plant(leg);
+        continue;
+      }
+      const tooFar = dist(leg.foot, f.coxaEnd) > f.d.femur + f.d.tibia - 4 * u;
+      if (dist(leg.foot, f.home) < 80 * u && !tooFar) continue;
+      const otherGroupBusy = legs.some(l => l.t < 1 && l.group !== leg.group);
+      if (otherGroupBusy && !tooFar) continue;
+      lift(leg);
+      leg.from = { ...leg.foot };
+      leg.to = pickTarget(leg, f);
+      leg.t = 0;
+    }
+  }
+
+  function knee(a, b, l1, l2) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.min(Math.max(Math.hypot(dx, dy), Math.abs(l1 - l2) + 1), l1 + l2 - 0.5);
+    const base = Math.atan2(dy, dx);
+    const A = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
+    const k1 = { x: a.x + Math.cos(base + A) * l1, y: a.y + Math.sin(base + A) * l1 };
+    const k2 = { x: a.x + Math.cos(base - A) * l1, y: a.y + Math.sin(base - A) * l1 };
+    const k = dist(k1, S) > dist(k2, S) ? k1 : k2;
+    const foot = { x: k.x + Math.cos(Math.atan2(b.y - k.y, b.x - k.x)) * l2, y: k.y + Math.sin(Math.atan2(b.y - k.y, b.x - k.x)) * l2 };
+    return { k, foot };
+  }
+
+  function dot(p, r, fill) {
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill; ctx.fill();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const d = dims();
+    const top = toWorld(0, -d.bh / 2);
+
+    // Barre d'accroche et fil de soie
+    const barW = Math.min(320, W * 0.45), barH = 30;
+    ctx.fillStyle = C.silk;
+    ctx.fillRect(S.anchorX - barW / 2, 0, barW, barH);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = C.silk; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(S.anchorX, barH); ctx.lineTo(top.x, top.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(216, 31, 79, 0.75)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(S.anchorX - 6, barH); ctx.lineTo(top.x - 3, top.y); ctx.stroke();
+    const bottom = toWorld(0, d.bh / 2);
+    ctx.beginPath(); ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(S.drag.x, S.drag.y); ctx.stroke();
+
+    // Pattes
+    const lw = Math.max(3, 4.2 * u), jr = Math.max(2.5, 3.4 * u);
+    ctx.lineJoin = 'round';
+    for (const leg of legs) {
+      const f = legFrame(leg);
+      const { k, foot } = knee(f.coxaEnd, leg.foot, d.femur, d.tibia);
+      const path = () => { ctx.beginPath(); ctx.moveTo(f.hip.x, f.hip.y); ctx.lineTo(f.coxaEnd.x, f.coxaEnd.y); ctx.lineTo(k.x, k.y); ctx.lineTo(foot.x, foot.y); };
+      path(); ctx.strokeStyle = C.edge; ctx.lineWidth = lw + 2.5; ctx.stroke();
+      path(); ctx.strokeStyle = C.leg; ctx.lineWidth = lw; ctx.stroke();
+      dot(f.coxaEnd, jr, C.joint);
+      dot(k, jr, C.joint);
+      dot(foot, leg.t < 1 ? jr * 1.5 : jr * 1.15, C.joint);
+    }
+
+    // Corps
+    ctx.save();
+    ctx.translate(S.x, S.y); ctx.rotate(S.rot);
+    ctx.beginPath(); ctx.roundRect(-d.bw / 2, -d.bh / 2, d.bw, d.bh, 3 * u);
+    ctx.fillStyle = C.body; ctx.fill();
+    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(-d.bw / 2 + 4 * u, -d.bh / 2 + 4 * u, d.bw - 8 * u, d.bh - 8 * u, 2 * u);
+    ctx.strokeStyle = 'rgba(238, 243, 246, 0.25)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, d.bh / 2 - d.bw * 0.55, d.bw * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = C.eye; ctx.fill();
+    ctx.strokeStyle = C.eyeRim; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    update(Math.min(0.05, (now - last) / 1000), now);
+    last = now;
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    const r = stage.getBoundingClientRect();
+    S.tx = e.clientX - r.left; S.ty = e.clientY - r.top;
+    S.next = performance.now() + 6000;
+  });
+  addEventListener('resize', resize);
+  resize();
+  document.fonts?.ready.then(() => { measure(); placeAll(); });
+  requestAnimationFrame(frame);
+})();
+</script>
