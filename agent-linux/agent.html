@@ -125,9 +125,23 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 #journal li.ko { border-color: var(--bad); }
 #journal li.sum { border-color: var(--accent); color: var(--accent); }
 #journal code { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+
+.codebody { position: absolute; inset: 0; background: #11141b; font-family: var(--mono); font-size: clamp(9px, 1.15cqw, 12.5px); line-height: 1.6; padding: 0.5em 0; overflow: hidden; }
+.codebody .ln { display: grid; grid-template-columns: 2.6em 1fr; white-space: pre; }
+.codebody .ln b { color: #4b5366; font-weight: 400; text-align: right; padding-right: 0.8em; }
+.codebody .kw { color: #c792ea; } .codebody .fn { color: #82aaff; } .codebody .st { color: #c3e88d; } .codebody .nu { color: #f78c6c; }
+.codebody .empty { color: var(--dim); padding: 0 1em; font-family: var(--ui); }
+.codestatus { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.3em 0.9em; font-family: var(--mono); font-size: clamp(8px, 1cqw, 11px); background: #181c25; color: var(--dim); }
+.codestatus.err { color: var(--bad); } .codestatus.ok { color: var(--ok); }
+.bacbody { position: absolute; inset: 0; background: #0f1218; padding: 0.5em 0.8em; font-family: var(--mono); font-size: clamp(8px, 1.05cqw, 11.5px); overflow: hidden; display: grid; align-content: start; gap: 4px; }
+.bacbody .err { color: var(--bad); }
+.tkwin { justify-self: start; min-width: 60%; background: #ececec; color: #222; border-radius: 6px; overflow: hidden; font-family: var(--ui); box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+.tkwin .tt { background: #d6d6d6; font-size: 0.9em; padding: 2px 8px; display: flex; justify-content: space-between; }
+.tkwin .tc { padding: 6px 10px; display: grid; gap: 4px; justify-items: center; font-size: 1.05em; }
+.tkwin .tb { background: #fff; border: 1px solid #999; border-radius: 4px; padding: 1px 10px; font-size: 0.9em; }
+.cat { font-family: var(--mono); font-size: 10.5px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { #cursor, .hover-cell { transition: none; } .caret { animation: none; } }
 </style>
-
 <div id="app">
   <div id="desk" aria-label="Bureau Linux simulé">
     <div class="topbar"><span class="act">Activités</span><span class="clock" id="clock">09:00</span><span class="tray"><span>FR</span><span>Wi-Fi</span><span>100 %</span></span></div>
@@ -142,23 +156,24 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   <div id="side">
     <div class="card">
       <h1>Petit agent <span>Linux</span></h1>
-      <p class="note">Il ne connaît rien au départ. Il n’a que ses « mains » et ses « yeux », et apprend par essais et erreurs (apprentissage par renforcement).</p>
+      <p class="note">Il ne sait rien au départ et apprend par essais et erreurs. Son cerveau a deux parties, comme le tien.</p>
       <div class="io">
-        <b>Il voit</b><span>la case où est son curseur, ce qu’il y a dessous, les fenêtres ouvertes, ce qu’il a déjà tapé</span>
-        <b>Il agit</b><span>↑ ↓ ← → (curseur d’une case), clic, et un clavier de 13 touches-mots (ls, mkdir, cd, Entrée…)</span>
+        <b>La main</b><span>bouge le curseur d’une case (↑ ↓ ← →) et clique. Elle apprend à atteindre ce que la tête regarde.</span>
+        <b>La tête</b><span>voit les objets à l’écran et le clavier proposé (commandes, puis arguments grâce à l’autocomplétion, ou lignes de code). Elle apprend quoi viser, quoi taper, dans quel ordre, et comment réagir aux erreurs.</span>
       </div>
-      <label class="check"><input type="checkbox" id="gridToggle"> Montrer la grille que voit l’agent (12 × 8 cases)</label>
+      <p class="note">Le Linux, le mini-Python, tkinter et les .exe sont simulés dans la page. Rien ne s’exécute pour de vrai sur ton appareil.</p>
+      <label class="check"><input type="checkbox" id="gridToggle"> Montrer la grille de la main (12 × 8 cases)</label>
     </div>
 
     <div class="card">
       <h2>1. Entraînement <em id="level">jamais entraîné</em></h2>
       <div class="row">
-        <button class="primary" id="train">Entraîner 105 000 essais</button>
+        <button class="primary" id="train">Entraîner (environ 1 min)</button>
         <button id="forget">Tout oublier</button>
       </div>
       <div class="bar" id="progress"><i></i></div>
       <div class="skills" id="skills"></div>
-      <p class="note">+1 quand l’objectif est atteint, −0,01 par geste, −0,04 pour un geste inutile (cliquer dans le vide, taper sans fenêtre). Le bureau de départ change à chaque essai.</p>
+      <p class="note">Récompense +1 quand l’objectif est atteint, petite pénalité à chaque décision. Une décision jamais essayée lui paraît prometteuse : il a envie de la tester. Le bureau de départ change à chaque essai.</p>
     </div>
 
     <div class="card">
@@ -177,30 +192,71 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
         <button data-sp="3" aria-pressed="true">×3</button>
         <button data-sp="10" aria-pressed="false">×10</button>
       </div>
-      <p class="note">Aucun objectif donné : il choisit lui-même quoi faire (sa curiosité préfère ce qu’il n’a pas encore fait), se débrouille avec ce qu’il a appris et continue d’apprendre de ses erreurs.</p>
+      <p class="note">Aucun objectif donné : il choisit lui-même quoi faire, se débrouille avec ce qu’il a appris et continue d’apprendre de ses erreurs.</p>
       <ol id="journal"></ol>
     </div>
   </div>
 </div>
 
 <script>
-// Cerveau et monde du petit agent Linux. Aucune action « toute faite » : il n'a qu'une souris
-// (bouger d'une case, cliquer) et un clavier de mots. Il doit apprendre où cliquer et quoi taper.
+// Monde et cerveau du petit agent Linux.
+// Aucune action toute faite : une souris (bouger d'une case, cliquer) et un clavier de mots.
+// Le terminal, l'éditeur, l'atelier de code et le bac à sable sont simulés en JavaScript.
 (function (root) {
   const HOME = '/home/agent';
   const COLS = 12, ROWS = 8;
-  const KEYS = ['ls', 'pwd', 'mkdir', 'cd', 'cd ..', 'touch', 'cat', 'rm', '‹dossier›', '‹fichier›', '‹texte›', 'Entrée', 'Effacer'];
+  const TERM_KEYS = ['ls', 'pwd', 'mkdir', 'cd', 'cd ..', 'touch', 'cat', 'rm', 'cp', 'mv', 'grep', 'echo', '>', 'chmod +x', 'python3', './', '‹dossier›', '‹fichier›', '‹texte›', '‹mot›', 'Entrée', 'Effacer'];
+  const CODE_KEYS = ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'tk.Button(fen, text="Quitter").pack()', 'fen.mainloop()', 'print(‹texte›)', 'for i in range(1, 6):', '    print(i)', '⌫ ligne'];
+  const KEYS = [...TERM_KEYS, ...CODE_KEYS];
   const ACTIONS = ['↑', '↓', '←', '→', 'clic', ...KEYS.map(k => 'touche ' + k)];
+  const ARGS = ['‹dossier›', '‹fichier›', '‹texte›', '‹mot›'];
 
-  // Disposition des fenêtres sur la grille (colonnes x, lignes y, bornes incluses)
   const LAYOUT = {
     terminal: { x0: 0, x1: 6, y0: 1, y1: 3, close: [6, 1] },
     fichiers: { x0: 7, x1: 11, y0: 1, y1: 4, close: [11, 1], up: [7, 2], bin: [11, 2], items: [[7, 3], [8, 3], [9, 3], [10, 3], [11, 3], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4]] },
-    editeur: { x0: 1, x1: 6, y0: 4, y1: 6, close: [6, 4], save: [6, 6] }
+    editeur: { x0: 1, x1: 6, y0: 4, y1: 6, close: [6, 4], save: [6, 6] },
+    code: { x0: 0, x1: 6, y0: 1, y1: 5, close: [6, 1], run: [5, 1], build: [4, 1], neu: [3, 1] },
+    bac: { x0: 7, x1: 11, y0: 5, y1: 6, close: [11, 5] }
   };
-  const DOCK = { 4: 'terminal', 5: 'fichiers', 6: 'editeur', 7: 'corbeille' };
+  const DOCK = { 3: 'terminal', 4: 'fichiers', 5: 'editeur', 6: 'code', 7: 'corbeille' };
   const rnd = n => Math.random() * n | 0;
   const pick = a => a[rnd(a.length)];
+
+  // ---------- Mini-Python : exécute les lignes que l'agent a écrites ----------
+  function runProgram(lines, p) {
+    const out = [], g = { tk: false, fen: null };
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      const err = (type, msg) => ({ out, error: `${type} (ligne ${i + 1}) : ${msg}`, etype: type, win: null });
+      if (L === '    print(i)') return err('IndentationError', 'indentation inattendue');
+      if (L === 'for i in range(1, 6):') {
+        if (lines[i + 1] !== '    print(i)') return err('IndentationError', 'un bloc indenté était attendu');
+        for (let k = 1; k <= 5; k++) out.push(String(k));
+        i++;
+        continue;
+      }
+      if (L === 'print(‹texte›)') { out.push(p.text ?? ''); continue; }
+      if (L === 'import tkinter as tk') { g.tk = true; continue; }
+      if (L === 'fen = tk.Tk()') { if (!g.tk) return err('NameError', "le nom 'tk' n'est pas défini"); g.fen = { labels: [], buttons: 0, shown: false }; continue; }
+      if (L.startsWith('tk.Label') || L.startsWith('tk.Button')) {
+        if (!g.tk) return err('NameError', "le nom 'tk' n'est pas défini");
+        if (!g.fen) return err('NameError', "le nom 'fen' n'est pas défini");
+        if (g.fen.shown) { g.late = true; continue; }
+        if (L.startsWith('tk.Label')) g.fen.labels.push(p.text ?? ''); else g.fen.buttons++;
+        continue;
+      }
+      if (L === 'fen.mainloop()') { if (!g.fen) return err('NameError', "le nom 'fen' n'est pas défini"); g.fen.shown = true; continue; }
+    }
+    return { out, error: null, etype: null, win: g.fen, late: !!g.late };
+  }
+  // Résumé d'une exécution, tel que l'agent le perçoit
+  function runStatus(r) {
+    if (!r) return 'jamais';
+    if (r.error) return r.etype;
+    if (r.win && !r.win.shown) return 'fenetre-fermee';
+    if (r.win) return 'fenetre' + (r.win.labels.length ? '+texte' : '') + (r.win.buttons ? '+bouton' : '') + (r.late ? '+apres' : '');
+    return r.out.length ? 'sortie' + r.out.length : 'rien';
+  }
 
   class Env {
     reset(random = false) {
@@ -208,20 +264,24 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
         [HOME, { d: 1 }], [HOME + '/Documents', { d: 1 }], [HOME + '/Images', { d: 1 }],
         [HOME + '/notes.txt', { c: 'liste de courses : pain, pommes, café' }],
         [HOME + '/photo.png', { c: '(image)' }],
+        [HOME + '/hello.py', { c: '', prog: ['print(‹texte›)'], ptext: 'Bonjour depuis hello.py' }],
         [HOME + '/Documents/recette.txt', { c: 'crêpes : farine, œufs, lait' }]
       ]);
       this.cwd = HOME; this.fm = HOME; this.open = []; this.focus = null; this.sel = null;
       this.ed = { text: '', name: null, saving: false, nameBuf: null };
-      this.buf = []; this.term = []; this.lastCmd = null; this.read = null; this.trash = [];
-      this.cx = 6; this.cy = 3;
+      this.buf = []; this.term = []; this.lastCmd = null; this.read = null; this.grep = null; this.trash = [];
+      this.code = []; this.run = null; this.ran = null; this.built = null; this.cx = 6; this.cy = 3;
       if (random) {
-        if (Math.random() < 0.3) this.fs.set(HOME + '/projets', { d: 1 });
-        for (const app of ['terminal', 'fichiers', 'editeur']) if (Math.random() < 0.3) this.open.push(app);
+        if (Math.random() < 0.5) this.fs.set(HOME + '/projets', { d: 1 });
+        for (const app of ['terminal', 'fichiers', 'editeur', 'code']) if (Math.random() < 0.28) this.open.push(app);
         this.focus = this.open.length ? pick(this.open) : null;
         const r = Math.random();
         if (r < 0.2) this.cwd = HOME + '/Documents';
-        else if (r < 0.5 && this.fs.has(HOME + '/projets')) this.cwd = HOME + '/projets';
+        else if (r < 0.45 && this.fs.has(HOME + '/projets')) this.cwd = HOME + '/projets';
         if (this.open.includes('editeur')) this.ed.text = pick(['', 'brouillon', 'bonjour']);
+        // Départs variés : parfois des lignes de code ou une commande déjà commencées, tirées au hasard (souvent fausses)
+        if (this.open.includes('code') && Math.random() < 0.6) { const n = 1 + rnd(5); for (let i = 0; i < n; i++) this.code.push(pick(CODE_KEYS.slice(0, -1))); }
+        if (this.focus === 'terminal' && Math.random() < 0.3) { this.buf.push(pick(CMD_WORDS)); if (Math.random() < 0.5) this.buf.push(pick(ARG_WORDS.slice(0, 4))); }
         this.cx = rnd(COLS); this.cy = rnd(ROWS);
       }
       return this;
@@ -231,8 +291,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       const pre = dir + '/';
       return [...this.fs.keys()].filter(k => k.startsWith(pre) && !k.slice(pre.length).includes('/')).map(k => k.slice(pre.length)).sort();
     }
-    say(line, err) { this.term.push({ line, err }); if (this.term.length > 40) this.term.shift(); }
-    // Ce qui se trouve sous une case, en tenant compte de la fenêtre au premier plan
+    say(line, err) { this.term.push({ line, err }); if (this.term.length > 60) this.term.shift(); }
     hit(x, y) {
       if (y === 7 && DOCK[x]) return { kind: 'dock', app: DOCK[x] };
       const order = [...this.open].sort((a, b) => (a === this.focus) - (b === this.focus)).reverse();
@@ -247,6 +306,9 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
           if (k >= 0) { const name = this.list(this.fm)[k]; if (name) return { kind: 'item', app, name }; }
         }
         if (app === 'editeur' && x === L.save[0] && y === L.save[1]) return { kind: 'save', app };
+        if (app === 'code' && x === L.run[0] && y === L.run[1]) return { kind: 'run', app };
+        if (app === 'code' && x === L.build[0] && y === L.build[1]) return { kind: 'build', app };
+        if (app === 'code' && x === L.neu[0] && y === L.neu[1]) return { kind: 'new', app };
         return { kind: 'win', app };
       }
       return { kind: 'desk' };
@@ -258,27 +320,62 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       }
       this.focus = app;
     }
-    run(p) {
-      const t = this.buf, w = t.map(k => k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k);
-      this.buf = [];
-      const line = w.join(' ');
-      this.say('$ ' + line);
-      const named = t[1] === '‹dossier›' || t[1] === '‹fichier›';
-      const arg = named ? w[1] : null, one = w.length === 2 && named, path = arg ? this.cwd + '/' + arg : null;
-      if (w[0] === 'ls' && w.length === 1) { this.say(this.list(this.cwd).join('  ') || '(vide)'); this.lastCmd = 'ls:' + this.cwd; return true; }
-      if (w[0] === 'pwd' && w.length === 1) { this.say(this.cwd); return true; }
-      if (w[0] === 'cd ..' && w.length === 1) { if (this.cwd !== HOME) this.cwd = this.cwd.slice(0, this.cwd.lastIndexOf('/')); return true; }
-      if (one && arg) {
-        if (w[0] === 'mkdir') { if (this.fs.has(path)) this.say(`mkdir: « ${arg} » existe déjà`, 1); else this.fs.set(path, { d: 1 }); return true; }
-        if (w[0] === 'cd') { if (this.isDir(path)) { this.cwd = path; return true; } this.say(`cd: ${arg}: aucun dossier de ce nom`, 1); return false; }
-        if (w[0] === 'touch') { if (!this.fs.has(path)) this.fs.set(path, { c: '' }); return true; }
-        if (w[0] === 'cat') { const f = this.fs.get(path); if (f && !f.d) { this.say(f.c || '(vide)'); this.read = path; return true; } this.say(`cat: ${arg}: introuvable`, 1); return false; }
-        if (w[0] === 'rm') { if (this.fs.has(path) && !this.isDir(path)) { this.fs.delete(path); return true; } this.say(`rm: ${arg}: introuvable`, 1); return false; }
-      }
-      this.say(`${line || '(rien)'} : commande inconnue`, 1);
-      return false;
+    // Lance un programme dans le bac à sable
+    launch(prog, ptext, from) {
+      const r = runProgram(prog, { text: ptext });
+      r.from = from;
+      this.ran = r;
+      if (!this.open.includes('bac')) this.open.push('bac');
+      return r;
     }
-    // Une action = un geste de souris ou une touche. Renvoie false si le geste n'a servi à rien.
+    exec(p) {
+      const t = this.buf, w = t.map(k => k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k);
+      this.buf = [];
+      const line = w.map(x => x ?? '?').join(' ').replace('./ ', './');
+      this.say('$ ' + line);
+      const fail = msg => { this.say(msg, 1); return false; };
+      if (w.some(x => x == null)) return fail(`${line} : argument manquant`);
+      const is = (...pattern) => t.length === pattern.length && pattern.every((k, i) => k === t[i] || (k === 'F' && t[i] === '‹fichier›') || (k === 'D' && t[i] === '‹dossier›'));
+      const at = name => this.cwd + '/' + name;
+      if (is('ls')) { this.say(this.list(this.cwd).join('  ') || '(vide)'); this.lastCmd = 'ls:' + this.cwd; return true; }
+      if (is('pwd')) { this.say(this.cwd); return true; }
+      if (is('cd ..')) { if (this.cwd !== HOME) this.cwd = this.cwd.slice(0, this.cwd.lastIndexOf('/')); return true; }
+      if (is('mkdir', 'D')) { const path = at(w[1]); if (this.fs.has(path)) return fail(`mkdir: « ${w[1]} » existe déjà`); this.fs.set(path, { d: 1 }); return true; }
+      if (is('cd', 'D')) { if (this.isDir(at(w[1]))) { this.cwd = at(w[1]); return true; } return fail(`cd: ${w[1]}: aucun dossier de ce nom`); }
+      if (is('touch', 'F')) { if (!this.fs.has(at(w[1]))) this.fs.set(at(w[1]), { c: '' }); return true; }
+      if (is('cat', 'F')) { const f = this.fs.get(at(w[1])); if (f && !f.d) { this.say(f.prog ? f.prog.join('\n') : (f.c || '(vide)')); this.read = at(w[1]); return true; } return fail(`cat: ${w[1]}: introuvable`); }
+      if (is('rm', 'F')) { if (this.fs.has(at(w[1])) && !this.isDir(at(w[1]))) { this.fs.delete(at(w[1])); return true; } return fail(`rm: ${w[1]}: introuvable`); }
+      if (is('cp', 'F', 'D') || is('mv', 'F', 'D')) {
+        const src = at(w[1]), dst = at(w[2]);
+        if (!this.fs.has(src) || this.isDir(src)) return fail(`${w[0]}: ${w[1]}: introuvable`);
+        if (!this.isDir(dst)) return fail(`${w[0]}: ${w[2]}: aucun dossier de ce nom`);
+        this.fs.set(dst + '/' + w[1], { ...this.fs.get(src) });
+        if (w[0] === 'mv') this.fs.delete(src);
+        return true;
+      }
+      if (is('grep', '‹mot›', 'F')) {
+        const f = this.fs.get(at(w[2]));
+        if (!f || f.d) return fail(`grep: ${w[2]}: introuvable`);
+        const hits = (f.prog ? f.prog.join('\n') : f.c).split('\n').filter(l => l.includes(w[1]));
+        hits.forEach(h => this.say(h));
+        if (hits.length) this.grep = at(w[2]) + '#' + w[1];
+        return true;
+      }
+      if (is('echo', '‹texte›', '>', 'F')) { this.fs.set(at(w[3]), { c: w[1] }); return true; }
+      if (is('chmod +x', 'F')) { const f = this.fs.get(at(w[1])); if (!f || f.d) return fail(`chmod: ${w[1]}: introuvable`); f.x = true; return true; }
+      if (is('python3', 'F') || is('./', 'F')) {
+        const f = this.fs.get(at(w[1]));
+        if (!f || f.d) return fail(`${line}: fichier introuvable`);
+        if (w[0] === './' && !f.x) return fail(`bash: ${line}: Permission refusée`);
+        if (w[0] === 'python3' && !w[1].endsWith('.py')) return fail(`python3: ${w[1]} n'est pas un script Python`);
+        if (!f.prog) return fail(`${line}: ce n'est pas un programme`);
+        const r = this.launch(f.prog, f.ptext, w[1]);
+        r.out.forEach(o => this.say(o));
+        if (r.error) this.say(r.error, 1);
+        return !r.error;
+      }
+      return fail(`${line || '(rien)'} : commande inconnue`);
+    }
     step(ai, p) {
       const a = ACTIONS[ai];
       if (a === '↑') { if (this.cy === 0) return false; this.cy--; return true; }
@@ -288,9 +385,10 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       if (a === 'clic') {
         const h = this.hit(this.cx, this.cy);
         if (h.kind === 'dock') { if (h.app === 'corbeille') return false; this.focusApp(h.app); return true; }
-        if (h.kind === 'close') { this.open = this.open.filter(x => x !== h.app); if (this.focus === h.app) this.focus = this.open[this.open.length - 1] || null; return true; }
+        if (h.kind === 'close') { this.open = this.open.filter(x => x !== h.app); if (this.focus === h.app) this.focus = this.open.filter(x => x !== 'bac').pop() || null; return true; }
         if (h.kind === 'desk') return false;
-        this.focus = h.app;
+        if (h.kind === 'win') { if (h.app === 'bac' || this.focus === h.app) return false; this.focus = h.app; return true; }
+        if (h.app !== 'bac') this.focus = h.app;
         if (h.kind === 'item') { this.sel = h.name; return true; }
         if (h.kind === 'up') { if (this.fm === HOME) return false; this.fm = this.fm.slice(0, this.fm.lastIndexOf('/')); this.sel = null; return true; }
         if (h.kind === 'bin') {
@@ -299,16 +397,37 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
           this.trash.push({ name: this.sel, c: this.fs.get(path).c }); this.fs.delete(path); this.sel = null; return true;
         }
         if (h.kind === 'save') { if (!this.ed.text) return false; this.ed.saving = true; this.ed.nameBuf = null; return true; }
+        if (h.kind === 'new') { if (!this.code.length) return false; this.code = []; this.run = null; return true; }
+        if (h.kind === 'run') { if (!this.code.length) return false; this.run = this.launch(this.code, p.text, 'atelier'); return true; }
+        if (h.kind === 'build') {
+          if (!this.code.length || !p.file) return false;
+          const r = runProgram(this.code, p);
+          r.from = 'build';
+          this.run = r;
+          if (r.error) return false;
+          this.fs.set(HOME + '/' + p.file, { c: '', prog: [...this.code], ptext: p.text, x: false });
+          this.built = p.file;
+          return true;
+        }
         return true;
       }
       const key = a.slice(7);
+      const isCode = CODE_KEYS.includes(key);
+      if (this.focus === 'code') {
+        if (!isCode) return false;
+        if (key === '⌫ ligne') { if (!this.code.length) return false; this.code.pop(); this.run = null; return true; }
+        if (this.code.length >= 6) return false;
+        this.code.push(key); this.run = null; return true;
+      }
+      if (isCode) return false;
       if (this.focus === 'terminal') {
-        if (key === 'Entrée') return this.buf.length ? this.run(p) : false;
+        if (key === 'Entrée') return this.buf.length ? this.exec(p) : false;
         if (key === 'Effacer') { const had = this.buf.length > 0; this.buf = []; return had; }
-        if (this.buf.length >= 2) return false;
+        if (this.buf.length >= 4) return false;
         if (key === '‹dossier›' && !p.dir) return false;
         if (key === '‹fichier›' && !p.file) return false;
-        if (key === '‹texte›') return false;
+        if (key === '‹texte›' && !p.text) return false;
+        if (key === '‹mot›' && !p.word) return false;
         this.buf.push(key); return true;
       }
       if (this.focus === 'editeur') {
@@ -326,159 +445,228 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     }
   }
 
+  const fget = (e, path) => e.fs.get(HOME + '/' + path);
   const TASKS = [
-    { id: 'term', label: 'Ouvrir le terminal', p: {}, done: e => e.focus === 'terminal' },
-    { id: 'ls', label: 'Lister le dossier personnel', p: {}, done: e => e.lastCmd === 'ls:' + HOME },
-    { id: 'mkdir', label: 'Créer un dossier', p: { dir: 'projets' }, done: (e, p) => e.isDir(HOME + '/' + p.dir) },
-    { id: 'touch', label: 'Créer un fichier dans un dossier', p: { dir: 'projets', file: 'idee.txt' }, done: (e, p) => { const f = e.fs.get(`${HOME}/${p.dir}/${p.file}`); return !!f && !f.d; } },
-    { id: 'cat', label: 'Lire un fichier texte', p: { file: 'notes.txt' }, done: (e, p) => e.read === HOME + '/' + p.file },
-    { id: 'write', label: 'Écrire et enregistrer un texte', p: { file: 'lettre.txt', text: 'bonjour' }, done: (e, p) => e.fs.get(HOME + '/' + p.file)?.c === p.text },
-    { id: 'trash', label: 'Mettre un fichier à la corbeille', p: { file: 'photo.png' }, done: (e, p) => !e.fs.has(HOME + '/' + p.file) }
+    { id: 'term', cat: 'Bureau', label: 'Ouvrir le terminal', p: {}, done: e => e.focus === 'terminal' },
+    { id: 'write', cat: 'Bureau', label: 'Écrire et enregistrer un texte', p: { file: 'lettre.txt', text: 'bonjour' }, done: (e, p) => fget(e, p.file)?.c === p.text },
+    { id: 'trash', cat: 'Bureau', label: 'Mettre un fichier à la corbeille', p: { file: 'photo.png' }, done: (e, p) => !fget(e, p.file) },
+    { id: 'ls', cat: 'Commandes', label: 'ls : lister le dossier', p: {}, done: e => e.lastCmd === 'ls:' + HOME },
+    { id: 'mkdir', cat: 'Commandes', label: 'mkdir : créer un dossier', p: { dir: 'projets' }, done: (e, p) => e.isDir(HOME + '/' + p.dir) },
+    { id: 'touch', cat: 'Commandes', label: 'cd + touch : fichier dans un dossier', p: { dir: 'projets', file: 'idee.txt' }, done: (e, p) => { const x = fget(e, p.dir + '/' + p.file); return !!x && !x.d; } },
+    { id: 'cat', cat: 'Commandes', label: 'cat : lire un fichier', p: { file: 'notes.txt' }, done: (e, p) => e.read === HOME + '/' + p.file },
+    { id: 'cp', cat: 'Commandes', label: 'cp : copier dans un dossier', p: { file: 'notes.txt', dir: 'Documents' }, done: (e, p) => { const a = fget(e, p.dir + '/' + p.file), b = fget(e, p.file); return !!a && !!b && a.c === b.c && String(a.prog) === String(b.prog); } },
+    { id: 'mv', cat: 'Commandes', label: 'mv : déplacer dans un dossier', p: { file: 'photo.png', dir: 'Images' }, done: (e, p) => !!fget(e, p.dir + '/' + p.file) && !fget(e, p.file) },
+    { id: 'grep', cat: 'Commandes', label: 'grep : chercher un mot', p: { file: 'notes.txt', word: 'pain' }, done: (e, p) => e.grep === `${HOME}/${p.file}#${p.word}` },
+    { id: 'echo', cat: 'Commandes', label: 'echo > : écrire dans un fichier', p: { file: 'todo.txt', text: 'coder' }, done: (e, p) => fget(e, p.file)?.c === p.text },
+    { id: 'py', cat: 'Commandes', label: 'python3 : lancer un script', p: { file: 'hello.py' }, done: (e, p) => e.ran?.from === p.file && !e.ran.error },
+    { id: 'exe', cat: 'Commandes', label: 'chmod +x puis ./ : lancer un .exe', p: { file: 'app.exe' },
+      setup: e => e.fs.set(HOME + '/app.exe', { c: '', prog: ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'fen.mainloop()'], ptext: 'Mon appli', x: Math.random() < 0.3 }),
+      done: (e, p) => e.ran?.from === p.file && !e.ran.error },
+    { id: 'c-print', cat: 'Code', label: 'Programme qui affiche un texte', p: { text: 'Bonjour' }, done: (e, p) => e.run?.from === 'atelier' && !e.run.error && !e.run.win && e.run.out.join('|') === p.text },
+    { id: 'c-count', cat: 'Code', label: 'Programme qui compte de 1 à 5', p: {}, done: e => e.run?.from === 'atelier' && !e.run.error && !e.run.win && e.run.out.join('') === '12345' },
+    { id: 'c-tk', cat: 'Code', label: 'Fenêtre tkinter avec un texte', p: { text: 'Salut !' }, done: (e, p) => e.run?.from === 'atelier' && !e.run.error && e.run.win?.shown && e.run.win.labels.includes(p.text) },
+    { id: 'c-btn', cat: 'Code', label: 'Fenêtre tkinter avec un bouton', p: {}, done: e => e.run?.from === 'atelier' && !e.run.error && e.run.win?.shown && e.run.win.buttons > 0 },
+    { id: 'c-exe', cat: 'Code', label: 'Construire un .exe avec fenêtre', p: { file: 'appli.exe', text: 'Mon appli' }, done: (e, p) => e.built === p.file && e.run?.win?.shown }
   ];
 
-  // Ce que l'agent perçoit : où est son curseur, ce qu'il y a dessous, l'état de l'écran et ce qu'il a déjà tapé
-  function observe(e, task, p) {
-    const h = e.hit(e.cx, e.cy);
-    const under = h.kind === 'item' ? (h.name === p.file ? 'cible' : 'item') : h.kind === 'dock' ? 'd-' + h.app : h.kind === 'desk' ? 'desk' : h.kind + '-' + h.app;
-    const ctx = [
-      task.id, e.focus || '-',
-      +e.open.includes('terminal'), +e.open.includes('fichiers'), +e.open.includes('editeur'),
+  // ---------- Perception : les objets visibles à l'écran ----------
+  function elements(e, p) {
+    const out = [];
+    for (const [x, app] of Object.entries(DOCK)) if (app !== 'corbeille') out.push({ d: 'icône ' + app, x: +x, y: 7 });
+    for (const app of e.open) {
+      const L = LAYOUT[app];
+      out.push({ d: 'fermer ' + app, x: L.close[0], y: L.close[1] });
+      if (app !== 'bac') out.push({ d: 'fenêtre ' + app, x: L.close[0] - 1, y: L.y0 + 1 });
+      if (app === 'fichiers') {
+        out.push({ d: 'bouton Parent', x: L.up[0], y: L.up[1] }, { d: 'bouton Corbeille', x: L.bin[0], y: L.bin[1] });
+        e.list(e.fm).slice(0, L.items.length).forEach((name, k) => {
+          if (name === p.file) out.push({ d: 'fichier visé', x: L.items[k][0], y: L.items[k][1] });
+          else if (!out.some(o => o.d === 'autre fichier')) out.push({ d: 'autre fichier', x: L.items[k][0], y: L.items[k][1] });
+        });
+      }
+      if (app === 'editeur') out.push({ d: 'bouton Enregistrer', x: L.save[0], y: L.save[1] });
+      if (app === 'code') out.push({ d: 'bouton Exécuter', x: L.run[0], y: L.run[1] }, { d: 'bouton Construire .exe', x: L.build[0], y: L.build[1] }, { d: 'bouton Nouveau', x: L.neu[0], y: L.neu[1] });
+    }
+    // On ne garde que ce qui n'est pas caché par une autre fenêtre
+    return out.filter(o => { const h = e.hit(o.x, o.y); return o.d.startsWith('icône') || (h.app && o.d.endsWith(h.app)) || h.kind === 'item' || ['up', 'bin', 'save', 'run', 'build', 'new'].includes(h.kind); });
+  }
+
+  // ---------- La main : amener le curseur sur un objet et cliquer ----------
+  const MOVES = ['↑', '↓', '←', '→', 'clic'];
+  class Hand {
+    constructor() { this.Q = new Map(); this.trained = 0; this.wins = []; }
+    key(e, t) { const c = v => Math.max(-4, Math.min(4, v)); return c(t.x - e.cx) + ',' + c(t.y - e.cy); }
+    row(k) { let r = this.Q.get(k); if (!r) { r = new Float32Array(5); this.Q.set(k, r); } return r; }
+    pick(e, t, eps) { const r = this.row(this.key(e, t)); if (Math.random() < eps) return rnd(5); let b = 0; for (let i = 1; i < 5; i++) if (r[i] > r[b] || (r[i] === r[b] && Math.random() < 0.3)) b = i; return b; }
+    train(count) {
+      for (let n = 0; n < count; n++) {
+        const e = { cx: rnd(COLS), cy: rnd(ROWS) }, t = { x: rnd(COLS), y: rnd(ROWS) };
+        const eps = Math.max(0.05, 1 - this.trained / 3000);
+        let ok = false;
+        for (let k = 0; k < 40 && !ok; k++) {
+          const s = this.key(e, t), a = this.pick(e, t, eps);
+          let r = -0.01;
+          if (a === 0) e.cy = Math.max(0, e.cy - 1); if (a === 1) e.cy = Math.min(ROWS - 1, e.cy + 1);
+          if (a === 2) e.cx = Math.max(0, e.cx - 1); if (a === 3) e.cx = Math.min(COLS - 1, e.cx + 1);
+          if (a === 4) { if (e.cx === t.x && e.cy === t.y) { r = 1; ok = true; } else r = -0.05; }
+          const row = this.row(s), nx = ok ? 0 : Math.max(...this.row(this.key(e, t)));
+          row[a] += 0.5 * (r + 0.95 * nx - row[a]);
+        }
+        this.trained++; this.wins.push(ok); if (this.wins.length > 100) this.wins.shift();
+      }
+    }
+    rate() { return this.wins.length ? this.wins.filter(Boolean).length / this.wins.length : 0; }
+  }
+
+  // ---------- La tête : décider quoi viser ou quoi taper ----------
+  // Ce que la tête sait de la situation
+  function headState(e, task, p) {
+    const fl = p.file ? e.fs.get(e.cwd + '/' + p.file) : null;
+    const flags = [
       +(e.cwd === HOME),
       p.dir ? +e.isDir(HOME + '/' + p.dir) : '',
       p.dir ? +(e.cwd === HOME + '/' + p.dir) : '',
-      p.file ? +e.fs.has(e.cwd + '/' + p.file) : '',
-      p.file ? +(e.sel === p.file) : '',
-      p.text ? +(e.ed.text === p.text) : '',
-      +e.ed.saving, e.ed.nameBuf ? 1 : 0,
-      e.buf.join(',')
-    ].join('|');
-    return { ctx, cx: e.cx, cy: e.cy, under };
+      p.file ? (fl ? (fl.x ? 'x' : '1') : '0') : '',
+      task.id === 'trash' ? +(e.sel === p.file) + (e.fm === HOME ? 'h' : 'a') : '',
+      task.id === 'write' ? +(e.ed.text === p.text) + '' + +e.ed.saving + (e.ed.nameBuf ? 1 : 0) : '',
+      task.id === 'exe' || task.id === 'py' ? (e.ran ? (e.ran.error ? 'err' : 'ok') : '-') : ''
+    ].join('');
+    // Il ne regarde que ce qui compte pour l'objectif : le programme pour du code, la ligne de commande pour le terminal
+    const typed = task.cat === 'Code' ? e.code.map(l => CODE_KEYS.indexOf(l)).join('.') + '|' + runStatus(e.run) : task.cat === 'Commandes' ? e.buf.join(',') : '';
+    return task.id + '|' + (e.focus || '-') + '|' + flags + '|' + typed;
+  }
+  // Le clavier proposé dépend de ce qui est au premier plan, avec une autocomplétion comme dans un vrai terminal :
+  // ligne vide -> les commandes ; commande commencée -> les arguments, > , Entrée et Effacer
+  const CMD_WORDS = TERM_KEYS.filter(k => !['‹dossier›', '‹fichier›', '‹texte›', '‹mot›', '>', 'Entrée', 'Effacer'].includes(k));
+  const ARG_WORDS = ['‹dossier›', '‹fichier›', '‹texte›', '‹mot›', '>', 'Entrée', 'Effacer'];
+  const keysFor = e => e.focus === 'terminal' ? (e.buf.length ? ARG_WORDS : CMD_WORDS) : e.focus === 'editeur' ? ['‹texte›', '‹fichier›', 'Entrée', 'Effacer'] : e.focus === 'code' ? CODE_KEYS : [];
+  function choices(e, p) { return [...elements(e, p).map(o => ({ kind: 'viser', ...o })), ...keysFor(e).map(k => ({ kind: 'touche', d: k }))]; }
+  // Applique une décision. En entraînement la main est supposée réussir (elle s'entraîne à part)
+  function applyChoice(e, c, p) {
+    if (c.kind === 'touche') return e.step(ACTIONS.indexOf('touche ' + c.d), p);
+    e.cx = c.x; e.cy = c.y;
+    return e.step(4, p);
   }
 
-  // Son cerveau ne retient pas chaque case séparément : il combine plusieurs « intuitions »
-  // (la situation seule, la colonne du curseur, sa ligne, la case exacte, ce qu'il voit dessous).
-  // Ainsi, ce qu'il apprend à un endroit l'aide ailleurs.
-  const bases = s => [s.ctx, s.ctx + '#x' + s.cx, s.ctx + '#y' + s.cy, s.ctx + '#' + s.cx + ',' + s.cy, s.ctx + '#u' + s.under];
+  // Les objectifs les plus longs reviennent plus souvent à l'entraînement
+  const WEIGHT = { touch: 6, write: 2, exe: 3, cp: 3, mv: 3, grep: 3, echo: 4, py: 2, 'c-print': 2, 'c-count': 3, 'c-tk': 5, 'c-btn': 7, 'c-exe': 3 };
+  const ORDER = TASKS.flatMap((t, i) => Array(WEIGHT[t.id] || 1).fill(i));
 
-  // Les objectifs longs (créer un fichier dans un dossier, écrire un texte) reviennent deux fois plus souvent
-  const ORDER = [0, 1, 2, 3, 3, 4, 5, 5, 5, 6];
-
-  class Brain {
-    constructor() { this.w = new Map(); this.stats = {}; this.trained = 0; for (const t of TASKS) this.stats[t.id] = { tries: 0, wins: [], steps: [] }; }
-    rows(s) {
-      if (s._rows) return s._rows;
-      return (s._rows = bases(s).map(k => { let r = this.w.get(k); if (!r) { r = new Float32Array(ACTIONS.length); this.w.set(k, r); } return r; }));
-    }
-    values(s) { const R = this.rows(s), v = new Float32Array(ACTIONS.length); for (const r of R) for (let i = 0; i < v.length; i++) v[i] += r[i]; return v; }
-    best(s) { const v = this.values(s); let b = 0, n = 1; for (let i = 1; i < v.length; i++) { if (v[i] > v[b] + 1e-9) { b = i; n = 1; } else if (Math.abs(v[i] - v[b]) < 1e-9 && Math.random() < 1 / ++n) b = i; } return b; }
-    maxq(s) { const v = this.values(s); let m = v[0]; for (let i = 1; i < v.length; i++) if (v[i] > m) m = v[i]; return m; }
-    choose(s, eps) { return Math.random() < eps ? rnd(ACTIONS.length) : this.best(s); }
-    learn(s, a, target, lr = 0.5) {
-      const R = this.rows(s);
-      let q = 0; for (const r of R) q += r[a];
-      const d = (target - q) * lr / R.length;
-      for (const r of R) r[a] += d;
-    }
-    // Il joue un essai entier, puis repasse le film à l'envers pour que la récompense remonte tout le chemin
-    episode(task, eps, maxSteps = 60, update = true) {
+  class Head {
+    constructor() { this.Q = new Map(); this.stats = {}; this.trained = 0; this.carry = null; for (const t of TASKS) this.stats[t.id] = { tries: 0, wins: [], steps: [] }; }
+    row(s) { let r = this.Q.get(s); if (!r) { r = new Map(); this.Q.set(s, r); } return r; }
+    // Optimisme : une décision jamais essayée paraît prometteuse, il a envie de la tester
+    q(s, c, opt = true) { const v = this.row(s).get(c.d); return v === undefined ? (opt ? 0.3 : 0) : v; }
+    best(s, C, opt = true) { let b = C[0], vb = this.q(s, b, opt), n = 1; for (const c of C.slice(1)) { const v = this.q(s, c, opt); if (v > vb + 1e-9) { b = c; vb = v; n = 1; } else if (Math.abs(v - vb) < 1e-9 && Math.random() < 1 / ++n) b = c; } return b; }
+    maxq(s, C, opt = true) { let m = -Infinity; for (const c of C) m = Math.max(m, this.q(s, c, opt)); return C.length ? m : 0; }
+    // En entraînement il est optimiste (il veut tout essayer) ; seul, il s'en tient à ce qu'il sait
+    choose(s, C, eps, opt = true) { return Math.random() < eps ? pick(C) : this.best(s, C, opt); }
+    learn(s, c, target, lr = 0.5) { const r = this.row(s), q = r.has(c.d) ? r.get(c.d) : target; r.set(c.d, q + lr * (target - q)); }
+    episode(task, eps, maxSteps = 25, update = true) {
       const e = new Env().reset(true), p = task.p, path = [];
-      let s = observe(e, task, p), n = 0, ok = false;
+      if (task.setup) task.setup(e);
+      // Parfois, il garde son bureau tel qu'il l'a laissé (fenêtres, code, commande commencée)
+      const c0 = this.carry;
+      if (c0 && Math.random() < 0.4) {
+        Object.assign(e, { open: [...c0.open], focus: c0.focus, code: [...c0.code], buf: [...c0.buf], run: c0.run, ran: c0.ran, cx: c0.cx, cy: c0.cy, ed: { ...c0.ed, saving: false, nameBuf: null } });
+        if (!e.isDir(c0.cwd)) e.cwd = HOME; else e.cwd = c0.cwd;
+      }
+      let n = 0, ok = false;
       while (n < maxSteps) {
-        const a = this.choose(s, eps);
-        const useful = e.step(a, p);
+        const s = headState(e, task, p), C = choices(e, p), c = this.choose(s, C, eps);
+        const useful = applyChoice(e, c, p);
         n++;
-        ok = task.done(e, p);
-        const s2 = observe(e, task, p);
-        path.push([s, a, ok ? 1 : useful ? -0.01 : -0.04, s2, ok]);
-        s = s2;
+        ok = !!task.done(e, p);
+        const s1 = headState(e, task, p);
+        path.push([s, c, (ok ? 1 : useful ? -0.02 : -0.06) , s1, choices(e, p), ok]);
         if (ok) break;
       }
+      this.carry = e;
       if (update) for (let i = path.length - 1; i >= 0; i--) {
-        const [s0, a, r, s1, end] = path[i];
-        this.learn(s0, a, r + (end ? 0 : 0.97 * this.maxq(s1)));
+        const [s0, c, r, s1, C1, end] = path[i];
+        this.learn(s0, c, r + (end ? 0 : 0.95 * this.maxq(s1, C1)));
       }
       return { ok, n };
     }
     train(count) {
       for (let k = 0; k < count; k++) {
-        const task = TASKS[ORDER[this.trained % ORDER.length]], st = this.stats[task.id];
-        const eps = Math.max(0.05, 1 - st.tries / 3000);
-        const r = this.episode(task, eps);
+        const task = TASKS[pick(ORDER)], st = this.stats[task.id];
+        const r = this.episode(task, Math.max(0.03, 0.3 - st.tries / 6000));
         st.tries++; st.wins.push(r.ok); st.steps.push(r.n);
-        if (st.wins.length > 50) { st.wins.shift(); st.steps.shift(); }
+        if (st.wins.length > 60) { st.wins.shift(); st.steps.shift(); }
         this.trained++;
       }
     }
   }
 
-  root.AgentLinux = { HOME, COLS, ROWS, KEYS, ACTIONS, LAYOUT, DOCK, Env, TASKS, observe, Brain, pick, rnd };
+  root.AgentLinux = { Hand, Head, elements, choices, applyChoice, headState, keysFor, MOVES, HOME, COLS, ROWS, KEYS, TERM_KEYS, CODE_KEYS, ACTIONS, LAYOUT, DOCK, Env, TASKS, pick, rnd, runProgram, runStatus };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
 <script>
 (() => {
-  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, observe, Brain, pick } = window.AgentLinux;
+  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, Hand, Head, choices, headState, pick, runStatus } = window.AgentLinux;
   const $ = id => document.getElementById(id);
   const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
-  let brain = new Brain();
+  let hand = new Hand(), head = new Head();
 
-  // ---------- Rendu du bureau (chaque élément est posé sur la grille de l'agent) ----------
   const pct = (x, y, w = 1, h = 1) => `left:${x / COLS * 100}%;top:${y / ROWS * 100}%;width:${w / COLS * 100}%;height:${h / ROWS * 100}%`;
   const ICON = {
     terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="#63d68a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5-5 5M12 17h7"/></svg>',
     fichiers: '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" fill="#fff"/></svg>',
     editeur: '<svg viewBox="0 0 24 24" fill="none" stroke="#3b6fd8" stroke-width="2" stroke-linecap="round"><path d="M6 6h12M6 10h12M6 14h8M6 18h5"/></svg>',
+    code: '<svg viewBox="0 0 24 24" fill="none" stroke="#c792ea" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>',
     corbeille: '<svg viewBox="0 0 24 24" fill="none" stroke="#e6e9ef" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
   };
-  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', corbeille: '#4a505e' };
+  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', code: '#252a3a', corbeille: '#4a505e' };
   const FOLDER = '<svg class="ic" viewBox="0 0 30 24"><path d="M1 4a2 2 0 0 1 2-2h8l3 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#e8b84a"/><path d="M1 8h28v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#f5c95c"/></svg>';
   const FILE = '<svg class="ic" viewBox="0 0 30 24"><path d="M9 1h9l5 5v16a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" fill="#dfe4ee"/><path d="M18 1v5h5" fill="#b9c0cf"/><path d="M11 12h9M11 15h9M11 18h6" stroke="#8a93a6" stroke-width="1.2"/></svg>';
   const IMG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="2" fill="#7aa7ff"/><circle cx="11" cy="8" r="2.5" fill="#fff"/><path d="M5 19l6-6 4 4 3-3 7 7H5z" fill="#2d4f9e"/></svg>';
-  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k) ?? k;
-
+  const PROG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="3" fill="#c792ea"/><path d="M11 9l-3 3 3 3M19 9l3 3-3 3" stroke="#fff" stroke-width="1.6" fill="none"/></svg>';
+  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k) ?? k;
+  const shown = (line, p) => line.replace('‹texte›', JSON.stringify(p.text ?? ''));
   function el(cls, style, html) { const d = document.createElement('div'); d.className = cls; if (style) d.style.cssText = style; if (html != null) d.innerHTML = html; return d; }
+  function highlight(code) {
+    const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return esc.replace(/("[^"]*")/g, '<span class="st">$1</span>').replace(/\b(import|as|for|in)\b/g, '<span class="kw">$1</span>').replace(/\b(print|range|Tk|Label|Button|pack|mainloop)\b/g, '<span class="fn">$1</span>').replace(/\b(\d+)\b/g, '<span class="nu">$1</span>');
+  }
 
   function render(e, p = {}) {
     const L = $('layer');
     L.textContent = '';
-    // Dock
-    L.append(el('dock', pct(4, 7, 4, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
+    L.append(el('dock', pct(3, 7, 5, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
     for (const [x, app] of Object.entries(DOCK)) {
       const d = el('dicon' + (e.open.includes(app) ? ' on' : ''), pct(+x, 7), `<div class="tile" style="background:${TILE[app]}">${ICON[app]}</div>`);
       if (app === 'corbeille' && e.trash.length) d.append(el('badge', '', String(e.trash.length)));
-      d.title = app;
       L.append(d);
     }
-    // Fenêtres, de l'arrière vers l'avant
     const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
     order.forEach((app, i) => {
       const W = LAYOUT[app], z = 10 + i * 5;
       const win = el('win' + (e.focus === app ? ' focus' : ''), pct(W.x0, W.y0, W.x1 - W.x0 + 1, W.y1 - W.y0 + 1) + `;z-index:${z}`);
-      const title = app === 'terminal' ? `agent@linux: ${e.cwd.replace(HOME, '~')}` : app === 'fichiers' ? 'Fichiers' : `${e.ed.name || 'Sans titre'} — Éditeur de texte`;
-      const hb = el('hb', '', ''); hb.textContent = title;
-      win.append(hb);
+      const title = { terminal: `agent@linux: ${e.cwd.replace(HOME, '~')}`, fichiers: 'Fichiers', editeur: `${e.ed.name || 'Sans titre'} — Éditeur`, code: 'Atelier de code — programme.py', bac: `Bac à sable${e.ran ? ' — ' + e.ran.from : ''}` }[app];
+      const hb = el('hb'); hb.textContent = title;
       const body = el('wbody');
-      win.append(body);
+      win.append(hb, body);
       L.append(win);
-      const [cx, cy] = W.close;
-      L.append(el('wbtn', pct(cx, cy) + `;z-index:${z + 1};height:auto;aspect-ratio:auto;top:calc(${cy / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
+      L.append(el('wbtn', pct(...W.close) + `;z-index:${z + 1};height:auto;top:calc(${W.close[1] / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
       if (app === 'terminal') {
         const t = el('term');
         for (const { line, err } of e.term.slice(-12)) { const d = document.createElement('div'); d.textContent = line; if (err) d.className = 'err'; t.append(d); }
         const ps = el('ps', '', '<b></b>$ <i></i><span class="caret"></span>');
         ps.querySelector('b').textContent = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' ';
-        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ');
+        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ').replace('./ ', './');
         t.append(ps);
         body.append(t);
       }
       if (app === 'fichiers') {
-        const path = el('path'); path.textContent = e.fm.replace(HOME, '~ (dossier personnel)');
+        const path = el('path'); path.textContent = e.fm.replace(HOME, '~');
         hb.append(path);
         L.append(el('wbtn', pct(...W.up) + `;z-index:${z + 1}`, '<div class="pill">↑ Parent</div>'));
         L.append(el('wbtn', pct(...W.bin) + `;z-index:${z + 1}`, '<div class="pill red">Corbeille</div>'));
         e.list(e.fm).slice(0, W.items.length).forEach((name, k) => {
-          const [ix, iy] = W.items[k], dir = e.isDir(e.fm + '/' + name);
-          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (dir ? FOLDER : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
+          const [ix, iy] = W.items[k], f = e.fs.get(e.fm + '/' + name);
+          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (f.d ? FOLDER : f.prog ? PROG : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
           it.querySelector('span').textContent = name;
           L.append(it);
         });
@@ -486,80 +674,100 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       if (app === 'editeur') {
         const paper = el('paper'); paper.textContent = e.ed.text;
         body.append(paper);
-        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px;box-sizing:border-box;border:1px solid ${e.focus === 'editeur' ? 'rgba(255,181,71,0.55)' : 'rgba(255,255,255,0.07)'};border-top:0`);
+        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px`);
         if (e.ed.saving) { foot.innerHTML = 'Enregistrer sous : <span class="namebox"></span>'; foot.querySelector('.namebox').textContent = e.ed.nameBuf || ''; }
         else foot.textContent = e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré';
         L.append(foot);
         L.append(el('wbtn', pct(...W.save) + `;z-index:${z + 2}`, '<div class="pill blue">Enregistrer</div>'));
       }
+      if (app === 'code') {
+        const cb = el('codebody');
+        if (!e.code.length) cb.append(el('empty', '', 'Programme vide. Les lignes s’ajoutent depuis la palette de code.'));
+        e.code.forEach((line, k) => { const ln = el('ln', '', `<b>${k + 1}</b><span>${highlight(shown(line, p))}</span>`); cb.append(ln); });
+        const st = el('codestatus');
+        const rs = runStatus(e.run);
+        st.textContent = !e.run ? 'Pas encore exécuté' : e.run.error ? e.run.error : e.run.win && !e.run.win.shown ? 'La fenêtre s’est fermée tout de suite (il manque mainloop ?)' : rs.startsWith('fenetre') ? 'Fenêtre ouverte dans le bac à sable' + (e.run.late ? ' (des lignes après mainloop() ne s’exécuteront qu’à la fermeture)' : '') : `Sortie : ${e.run.out.join(' ') || '(rien)'}`;
+        st.classList.add(e.run?.error ? 'err' : e.run ? 'ok' : 'x');
+        cb.append(st);
+        body.append(cb);
+        L.append(el('wbtn', pct(...W.run) + `;z-index:${z + 1}`, '<div class="pill blue" title="Exécuter">▶ Lancer</div>'));
+        L.append(el('wbtn', pct(...W.build) + `;z-index:${z + 1}`, '<div class="pill" title="Construire un .exe">.exe</div>'));
+        L.append(el('wbtn', pct(...W.neu) + `;z-index:${z + 1}`, '<div class="pill">Nouveau</div>'));
+      }
+      if (app === 'bac') {
+        const bb = el('bacbody');
+        const r = e.ran;
+        if (!r) bb.append(el('', '', 'En attente d’un programme.'));
+        else {
+          r.out.forEach(o => { const d = document.createElement('div'); d.textContent = o; bb.append(d); });
+          if (r.error) { const d = el('err'); d.textContent = r.error; bb.append(d); }
+          else if (r.win && r.win.shown) {
+            const tk = el('tkwin', '', '<div class="tt"><span>tk</span><span>✕</span></div><div class="tc"></div>');
+            for (const lab of r.win.labels) { const d = document.createElement('div'); d.textContent = lab; tk.lastChild.append(d); }
+            for (let i = 0; i < r.win.buttons; i++) tk.lastChild.append(el('tb', '', 'Quitter'));
+            if (!r.win.labels.length && !r.win.buttons) tk.lastChild.append(el('', 'color:#777;font-size:.85em', '(fenêtre vide)'));
+            bb.append(tk);
+          } else if (r.win) bb.append(el('', 'color:var(--dim)', 'La fenêtre s’est ouverte puis refermée aussitôt.'));
+          else if (!r.out.length) bb.append(el('', 'color:var(--dim)', '(le programme n’a rien affiché)'));
+        }
+        body.append(bb);
+      }
     });
-    placeCursor(e);
-  }
-
-  function placeCursor(e) {
     $('cursor').style.left = ((e.cx + 0.5) / COLS * 100) + '%';
     $('cursor').style.top = ((e.cy + 0.5) / ROWS * 100) + '%';
     $('hover').style.cssText = pct(e.cx, e.cy);
   }
 
-  // ---------- Animation d'un geste ----------
+  // ---------- Animation ----------
   let speed = 3;
   const sleep = ms => new Promise(r => setTimeout(r, ms / speed));
-  function bubble(text, ms = 1800) {
+  function bubble(text, ms = 2000) {
     const b = $('bubble');
-    b.textContent = text;
-    b.style.left = '3%'; b.style.top = '6%';
+    b.textContent = text; b.style.left = '3%'; b.style.top = '6%';
     b.classList.add('show');
     clearTimeout(bubble.t);
     bubble.t = setTimeout(() => b.classList.remove('show'), ms / speed);
   }
   function keycap(text) {
     const k = $('keycap');
-    k.textContent = text;
-    k.classList.add('show');
+    k.textContent = text; k.classList.add('show');
     clearTimeout(keycap.t);
-    keycap.t = setTimeout(() => k.classList.remove('show'), 500 / speed);
-  }
-  function describe(e, a, p) {
-    const act = ACTIONS[a];
-    if (act.length === 1) return { move: true };
-    if (act === 'clic') {
-      const h = e.hit(e.cx, e.cy);
-      const what = h.kind === 'dock' ? `l’icône ${h.app}` : h.kind === 'close' ? `fermer ${h.app}` : h.kind === 'item' ? h.name : h.kind === 'bin' ? 'Corbeille' : h.kind === 'up' ? 'Parent' : h.kind === 'save' ? 'Enregistrer' : h.kind === 'win' ? `la fenêtre ${h.app}` : 'le vide';
-      return { text: 'clic sur ' + what };
-    }
-    return { text: '⌨ ' + word(act.slice(7), p) };
+    keycap.t = setTimeout(() => k.classList.remove('show'), 600 / speed);
   }
 
-  async function gesture(e, a, p, animate) {
-    const d = describe(e, a, p);
-    const useful = e.step(a, p);
-    if (animate) {
-      const act = ACTIONS[a];
-      if (act === 'clic') { const c = $('cursor'); c.classList.remove('click'); void c.offsetWidth; c.classList.add('click'); }
-      else if (!d.move) keycap(word(act.slice(7), p));
-      render(e, p);
-      await sleep(d.move ? 110 : 260);
+  // La main amène le curseur sur l'objet visé, case par case, puis clique
+  async function reach(e, c, p, animate) {
+    for (let k = 0; k < 30; k++) {
+      const m = hand.pick(e, c, 0.02);
+      if (m === 4) {
+        const useful = e.step(4, p);
+        if (animate) { const cu = $('cursor'); cu.classList.remove('click'); void cu.offsetWidth; cu.classList.add('click'); render(e, p); await sleep(200); }
+        return useful;
+      }
+      e.step(m, p);
+      if (animate) { render(e, p); await sleep(90); }
     }
-    return { useful, d };
+    return false;
   }
 
-  // Joue un objectif avec ce que l'agent a appris (presque sans hasard)
-  async function perform(e, task, p, animate = true, maxSteps = 60) {
+  async function perform(e, task, p, animate = true, maxSteps = 25) {
     const log = [];
-    let moves = 0;
-    const flush = () => { if (moves) { log.push(`curseur ×${moves}`); moves = 0; } };
     for (let n = 0; n < maxSteps; n++) {
-      const s = observe(e, task, p);
-      const a = brain.choose(s, 0.05);
-      const { useful, d } = await gesture(e, a, p, animate);
-      if (d.move) moves++; else { flush(); log.push((useful ? '' : '✗ ') + d.text); }
-      // Il continue d'apprendre pendant qu'il est seul : un geste inutile perd de la valeur, il ne le répète pas
-      const ok = task.done(e, p);
-      brain.learn(s, a, ok ? 1 : (useful ? -0.01 : -0.04) + 0.97 * brain.maxq(observe(e, task, p)));
-      if (ok) { flush(); return { ok: true, log, n: n + 1 }; }
+      const s = headState(e, task, p), C = choices(e, p), c = head.choose(s, C, 0.03, false);
+      let useful;
+      if (c.kind === 'touche') {
+        useful = e.step(ACTIONS.indexOf('touche ' + c.d), p);
+        if (animate) { keycap(c.d.startsWith('‹') ? word(c.d, p) : shown(c.d, p)); render(e, p); await sleep(320); }
+        log.push((useful ? '' : '✗ ') + '⌨ ' + (c.d.startsWith('‹') ? word(c.d, p) : shown(c.d, p)));
+      } else {
+        useful = await reach(e, c, p, animate);
+        log.push((useful ? '' : '✗ ') + '🖱 ' + c.d);
+      }
+      const ok = !!task.done(e, p);
+      // Il continue d'apprendre pendant qu'il est seul
+      head.learn(s, c, ok ? 1 : (useful ? -0.02 : -0.06) + 0.95 * head.maxq(headState(e, task, p), choices(e, p), false));
+      if (ok) return { ok: true, log, n: n + 1 };
     }
-    flush();
     return { ok: false, log, n: maxSteps };
   }
 
@@ -568,80 +776,92 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 
   // ---------- Entraînement ----------
   function renderSkills() {
-    $('skills').textContent = '';
-    let total = 0;
+    const box = $('skills');
+    box.textContent = '';
+    const hr = el('skill', '', `<b>La main : viser et cliquer</b><div class="bar"><i style="width:${Math.round(hand.rate() * 100)}%"></i></div><span>${hand.trained ? Math.round(hand.rate() * 100) + ' %' : '–'}</span>`);
+    box.append(hr);
+    let cat = '', total = 0;
     for (const t of TASKS) {
-      const st = brain.stats[t.id];
+      if (t.cat !== cat) { cat = t.cat; box.append(el('cat', '', cat)); }
+      const st = head.stats[t.id];
       const rate = st.wins.length ? st.wins.filter(Boolean).length / st.wins.length : 0;
-      const okSteps = st.steps.filter((_, i) => st.wins[i]);
-      const avg = okSteps.length ? Math.round(okSteps.reduce((a, b) => a + b, 0) / okSteps.length) : '–';
       total += rate;
-      const row = el('skill', '', `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${avg} gestes</span>`);
+      const row = el('skill', '', `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${st.tries ? Math.round(rate * 100) + ' %' : '–'}</span>`);
       row.querySelector('b').textContent = t.label;
-      $('skills').append(row);
+      box.append(row);
     }
     const m = total / TASKS.length;
-    $('level').textContent = brain.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${brain.trained.toLocaleString('fr-FR')} essais`;
+    $('level').textContent = head.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${head.trained.toLocaleString('fr-FR')} essais`;
   }
 
   $('train').addEventListener('click', () => {
     if (busy) return;
     lock(true);
-    const total = 105000, chunk = 1500;
+    const total = 240000, chunk = 2000;
     let done = 0;
-    bubble('Je m’entraîne…', 3000);
+    hand.train(4000);
+    bubble('Je m’entraîne… regarde mes compétences monter.', 4000);
     (function next() {
-      brain.train(chunk); done += chunk;
+      head.train(chunk); done += chunk;
       $('progress').firstChild.style.width = (done / total * 100) + '%';
       renderSkills();
       if (done < total) setTimeout(next, 0);
       else { lock(false); bubble('Entraînement terminé. Regarde-moi faire !'); }
     })();
   });
-  $('forget').addEventListener('click', () => {
-    brain = new Brain();
-    $('progress').firstChild.style.width = '0';
-    renderSkills();
-  });
+  $('forget').addEventListener('click', () => { hand = new Hand(); head = new Head(); $('progress').firstChild.style.width = '0'; renderSkills(); });
 
-  for (const t of TASKS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; $('taskSel').append(o); }
+  let cat = '', group = null;
+  for (const t of TASKS) {
+    if (t.cat !== cat) { cat = t.cat; group = document.createElement('optgroup'); group.label = cat; $('taskSel').append(group); }
+    const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; group.append(o);
+  }
   $('show').addEventListener('click', async () => {
     if (busy) return;
     lock(true);
     const task = T[$('taskSel').value];
     const e = new Env().reset(true);
+    if (task.setup) task.setup(e);
     render(e, task.p);
     bubble('Objectif : ' + task.label.toLowerCase());
     await sleep(900);
     const r = await perform(e, task, task.p, true);
-    bubble(r.ok ? `Réussi en ${r.n} gestes !` : 'Raté… il faut encore m’entraîner.');
+    bubble(r.ok ? `Réussi en ${r.n} décision${r.n > 1 ? 's' : ''} !` : 'Raté… il faut encore m’entraîner.');
     lock(false);
   });
 
   // ---------- Mode libre ----------
-  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'voyages', 'robots', 'archives'];
-  const FILES = ['memo.txt', 'plan.txt', 'poeme.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'robots'];
+  const FILES = ['memo.txt', 'plan.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  const APPS = ['robot.exe', 'bonjour.exe', 'outil.exe', 'jeu.exe'];
+  const SAY = ['Bonjour le monde', 'Je sais coder !', 'Salut, humain', 'Vive Linux'];
   function chooseGoal(e, mem) {
     const home = e.list(HOME);
+    const isFile = n => !e.isDir(HOME + '/' + n);
     const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
     const newDir = DIRS.filter(d => !home.includes(d));
-    const newFile = FILES.filter(f => !home.includes(f) && !mem.made.has(f));
-    const mine = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
-    const junk = home.filter(n => !e.isDir(HOME + '/' + n) && (n.endsWith('.png') || (mem.made.has(n) && mem.read.has(n))));
+    const newFile = FILES.filter(f => !home.includes(f));
+    const myDirs = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
+    const exes = home.filter(n => n.endsWith('.exe') && !mem.launched.has(n));
     const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
-    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je suis curieux : que contient ${f} ?` }); }
-    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je me fais un dossier « ${d} ».` }); }
-    if (mine.length && newFile.length) { const d = pick(mine), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans mon dossier ${d}.` }); }
-    if (newFile.length) { const f = pick(newFile); c.push({ t: 'write', p: { file: f, text: compose(e, mem) }, why: `J’écris quelque chose dans ${f}.` }); }
-    if (junk.length) { const f = pick(junk); c.push({ t: 'trash', p: { file: f }, why: `${f} ne me sert plus, je le jette.` }); }
-    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6;
+    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je lis ${f}.` }); }
+    const readable = home.filter(n => n.endsWith('.txt') && e.fs.get(HOME + '/' + n).c);
+    if (readable.length) { const f = pick(readable), w = pick(e.fs.get(HOME + '/' + f).c.split(/[^\p{L}]+/u).filter(x => x.length > 3)); if (w) c.push({ t: 'grep', p: { file: f, word: w }, why: `Je cherche « ${w} » dans ${f} avec grep.` }); }
+    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je crée un dossier « ${d} ».` }); }
+    if (myDirs.length && newFile.length) { const d = pick(myDirs), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans ${d}.` }); }
+    if (newFile.length) { const f = pick(newFile); c.push({ t: 'echo', p: { file: f, text: pick(['coder', 'apprendre', 'dormir']) }, why: `J’écris une note dans ${f} avec echo.` }); }
+    const loose = home.filter(n => isFile(n) && (n.endsWith('.png') || n.endsWith('.txt')));
+    if (loose.length && myDirs.length) { const f = pick(loose), d = pick(myDirs); c.push({ t: pick(['cp', 'mv']), p: { file: f, dir: d }, why: `Je range ${f} dans ${d}.` }); }
+    if (home.includes('hello.py') && !mem.launched.has('hello.py')) c.push({ t: 'py', p: { file: 'hello.py' }, why: 'Il y a un script hello.py : je le lance avec python3.' });
+    c.push({ t: 'c-print', p: { text: pick(SAY) }, why: 'J’écris un petit programme qui affiche une phrase.' });
+    c.push({ t: 'c-count', p: {}, why: 'J’essaie une boucle qui compte jusqu’à 5.' });
+    c.push({ t: 'c-tk', p: { text: pick(SAY) }, why: 'Je fabrique une fenêtre avec tkinter.' });
+    c.push({ t: 'c-btn', p: {}, why: 'Je fais une fenêtre avec un bouton.' });
+    const newApp = APPS.filter(a => !home.includes(a));
+    if (newApp.length) { const a = pick(newApp); c.push({ t: 'c-exe', p: { file: a, text: pick(SAY) }, why: `Je construis mon application ${a}.` }); }
+    if (exes.length) { const x = pick(exes); c.push({ t: 'exe', p: { file: x }, why: `Je lance ${x} (chmod +x puis ./).` }); }
+    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6 + (g.t === 'exe' ? 0.5 : 0);
     return c.sort((a, b) => b.score - a.score)[0];
-  }
-  function compose(e, mem) {
-    const ideas = [`J'ai ${e.list(HOME).length} choses dans mon dossier.`, 'Bonjour, je suis un petit agent.', 'Aujourd hui j apprends Linux.'];
-    if (mem.seen.notes) ideas.push('A acheter : ' + mem.seen.notes.split(':')[1].trim());
-    if (mem.dirs.size) ideas.push('Mes dossiers : ' + [...mem.dirs].join(', '));
-    return pick(ideas);
   }
 
   $('free').addEventListener('click', async () => {
@@ -650,36 +870,37 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     $('journal').textContent = '';
     const e = new Env().reset(false);
     render(e);
-    if (!brain.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
-    const mem = { read: new Set(), made: new Set(), dirs: new Set(), count: {}, seen: {} };
-    let wins = 0, gestures = 0;
-    for (let i = 0; i < 10; i++) {
+    if (!head.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
+    const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
+    let wins = 0, decisions = 0;
+    for (let i = 0; i < 12; i++) {
       const g = chooseGoal(e, mem);
       const min = 9 * 60 + i * 4, clock = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
       $('clock').textContent = clock;
-      bubble(g.why, 2200);
+      bubble(g.why, 2400);
       await sleep(800);
+      e.run = null; e.ran = null;
       const r = await perform(e, T[g.t], g.p, true);
-      gestures += r.n;
+      decisions += r.n;
       mem.count[g.t] = (mem.count[g.t] || 0) + 1;
       if (r.ok) {
         wins++;
-        if (g.t === 'cat') { mem.read.add(g.p.file); mem.seen[g.p.file.replace('.txt', '')] = e.fs.get(HOME + '/' + g.p.file)?.c; }
+        if (g.t === 'cat') mem.read.add(g.p.file);
         if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
-        if (g.t === 'write' || g.t === 'touch') mem.made.add(g.p.file);
+        if (g.t === 'exe' || g.t === 'py') mem.launched.add(g.p.file);
       }
       const item = document.createElement('li');
       item.className = r.ok ? 'ok' : 'ko';
       item.innerHTML = '<b></b> <span></span><br><code></code>';
       item.querySelector('b').textContent = clock;
-      item.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.n} geste${r.n > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
+      item.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.n} décision${r.n > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
       item.querySelector('code').textContent = r.log.join(' → ');
       $('journal').append(item);
       $('journal').scrollTop = $('journal').scrollHeight;
     }
     const sum = document.createElement('li');
     sum.className = 'sum';
-    sum.textContent = `Bilan : 10 objectifs choisis tout seul, ${wins} réussis, ${gestures} gestes. Dossier final : ${e.list(HOME).join(', ')}. Corbeille : ${e.trash.map(t => t.name).join(', ') || 'vide'}.`;
+    sum.textContent = `Bilan : 12 objectifs choisis tout seul, ${wins} réussis, ${decisions} décisions. Dossier final : ${e.list(HOME).join(', ')}.`;
     $('journal').append(sum);
     $('journal').scrollTop = $('journal').scrollHeight;
     lock(false);
@@ -691,11 +912,14 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   }));
   $('gridToggle').addEventListener('change', ev => $('desk').classList.toggle('show-grid', ev.target.checked));
 
-  // État de départ : un bureau avec le gestionnaire de fichiers ouvert
+  // État de départ : l'atelier de code et le bac à sable montrent un exemple
   const start = new Env().reset(false);
-  start.open = ['fichiers', 'terminal']; start.focus = 'terminal';
+  start.open = ['terminal', 'fichiers', 'code']; start.focus = 'code';
+  start.code = ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'fen.mainloop()'];
+  start.run = start.launch(start.code, 'Exemple', 'atelier');
   start.term.push({ line: 'Bienvenue sur le bureau de l’agent.' });
-  render(start);
+  render(start, { text: 'Exemple' });
   renderSkills();
+  window.__agent = { get head() { return head; } };
 })();
 </script>

@@ -125,9 +125,23 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 #journal li.ko { border-color: var(--bad); }
 #journal li.sum { border-color: var(--accent); color: var(--accent); }
 #journal code { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+
+.codebody { position: absolute; inset: 0; background: #11141b; font-family: var(--mono); font-size: clamp(9px, 1.15cqw, 12.5px); line-height: 1.6; padding: 0.5em 0; overflow: hidden; }
+.codebody .ln { display: grid; grid-template-columns: 2.6em 1fr; white-space: pre; }
+.codebody .ln b { color: #4b5366; font-weight: 400; text-align: right; padding-right: 0.8em; }
+.codebody .kw { color: #c792ea; } .codebody .fn { color: #82aaff; } .codebody .st { color: #c3e88d; } .codebody .nu { color: #f78c6c; }
+.codebody .empty { color: var(--dim); padding: 0 1em; font-family: var(--ui); }
+.codestatus { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.3em 0.9em; font-family: var(--mono); font-size: clamp(8px, 1cqw, 11px); background: #181c25; color: var(--dim); }
+.codestatus.err { color: var(--bad); } .codestatus.ok { color: var(--ok); }
+.bacbody { position: absolute; inset: 0; background: #0f1218; padding: 0.5em 0.8em; font-family: var(--mono); font-size: clamp(8px, 1.05cqw, 11.5px); overflow: hidden; display: grid; align-content: start; gap: 4px; }
+.bacbody .err { color: var(--bad); }
+.tkwin { justify-self: start; min-width: 60%; background: #ececec; color: #222; border-radius: 6px; overflow: hidden; font-family: var(--ui); box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+.tkwin .tt { background: #d6d6d6; font-size: 0.9em; padding: 2px 8px; display: flex; justify-content: space-between; }
+.tkwin .tc { padding: 6px 10px; display: grid; gap: 4px; justify-items: center; font-size: 1.05em; }
+.tkwin .tb { background: #fff; border: 1px solid #999; border-radius: 4px; padding: 1px 10px; font-size: 0.9em; }
+.cat { font-family: var(--mono); font-size: 10.5px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { #cursor, .hover-cell { transition: none; } .caret { animation: none; } }
 </style>
-
 <div id="app">
   <div id="desk" aria-label="Bureau Linux simulé">
     <div class="topbar"><span class="act">Activités</span><span class="clock" id="clock">09:00</span><span class="tray"><span>FR</span><span>Wi-Fi</span><span>100 %</span></span></div>
@@ -142,23 +156,24 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   <div id="side">
     <div class="card">
       <h1>Petit agent <span>Linux</span></h1>
-      <p class="note">Il ne connaît rien au départ. Il n’a que ses « mains » et ses « yeux », et apprend par essais et erreurs (apprentissage par renforcement).</p>
+      <p class="note">Il ne sait rien au départ et apprend par essais et erreurs. Son cerveau a deux parties, comme le tien.</p>
       <div class="io">
-        <b>Il voit</b><span>la case où est son curseur, ce qu’il y a dessous, les fenêtres ouvertes, ce qu’il a déjà tapé</span>
-        <b>Il agit</b><span>↑ ↓ ← → (curseur d’une case), clic, et un clavier de 13 touches-mots (ls, mkdir, cd, Entrée…)</span>
+        <b>La main</b><span>bouge le curseur d’une case (↑ ↓ ← →) et clique. Elle apprend à atteindre ce que la tête regarde.</span>
+        <b>La tête</b><span>voit les objets à l’écran et le clavier proposé (commandes, puis arguments grâce à l’autocomplétion, ou lignes de code). Elle apprend quoi viser, quoi taper, dans quel ordre, et comment réagir aux erreurs.</span>
       </div>
-      <label class="check"><input type="checkbox" id="gridToggle"> Montrer la grille que voit l’agent (12 × 8 cases)</label>
+      <p class="note">Le Linux, le mini-Python, tkinter et les .exe sont simulés dans la page. Rien ne s’exécute pour de vrai sur ton appareil.</p>
+      <label class="check"><input type="checkbox" id="gridToggle"> Montrer la grille de la main (12 × 8 cases)</label>
     </div>
 
     <div class="card">
       <h2>1. Entraînement <em id="level">jamais entraîné</em></h2>
       <div class="row">
-        <button class="primary" id="train">Entraîner 105 000 essais</button>
+        <button class="primary" id="train">Entraîner (environ 1 min)</button>
         <button id="forget">Tout oublier</button>
       </div>
       <div class="bar" id="progress"><i></i></div>
       <div class="skills" id="skills"></div>
-      <p class="note">+1 quand l’objectif est atteint, −0,01 par geste, −0,04 pour un geste inutile (cliquer dans le vide, taper sans fenêtre). Le bureau de départ change à chaque essai.</p>
+      <p class="note">Récompense +1 quand l’objectif est atteint, petite pénalité à chaque décision. Une décision jamais essayée lui paraît prometteuse : il a envie de la tester. Le bureau de départ change à chaque essai.</p>
     </div>
 
     <div class="card">
@@ -177,7 +192,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
         <button data-sp="3" aria-pressed="true">×3</button>
         <button data-sp="10" aria-pressed="false">×10</button>
       </div>
-      <p class="note">Aucun objectif donné : il choisit lui-même quoi faire (sa curiosité préfère ce qu’il n’a pas encore fait), se débrouille avec ce qu’il a appris et continue d’apprendre de ses erreurs.</p>
+      <p class="note">Aucun objectif donné : il choisit lui-même quoi faire, se débrouille avec ce qu’il a appris et continue d’apprendre de ses erreurs.</p>
       <ol id="journal"></ol>
     </div>
   </div>
@@ -188,68 +203,68 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 </script>
 <script>
 (() => {
-  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, observe, Brain, pick } = window.AgentLinux;
+  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, Hand, Head, choices, headState, pick, runStatus } = window.AgentLinux;
   const $ = id => document.getElementById(id);
   const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
-  let brain = new Brain();
+  let hand = new Hand(), head = new Head();
 
-  // ---------- Rendu du bureau (chaque élément est posé sur la grille de l'agent) ----------
   const pct = (x, y, w = 1, h = 1) => `left:${x / COLS * 100}%;top:${y / ROWS * 100}%;width:${w / COLS * 100}%;height:${h / ROWS * 100}%`;
   const ICON = {
     terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="#63d68a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5-5 5M12 17h7"/></svg>',
     fichiers: '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" fill="#fff"/></svg>',
     editeur: '<svg viewBox="0 0 24 24" fill="none" stroke="#3b6fd8" stroke-width="2" stroke-linecap="round"><path d="M6 6h12M6 10h12M6 14h8M6 18h5"/></svg>',
+    code: '<svg viewBox="0 0 24 24" fill="none" stroke="#c792ea" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>',
     corbeille: '<svg viewBox="0 0 24 24" fill="none" stroke="#e6e9ef" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
   };
-  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', corbeille: '#4a505e' };
+  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', code: '#252a3a', corbeille: '#4a505e' };
   const FOLDER = '<svg class="ic" viewBox="0 0 30 24"><path d="M1 4a2 2 0 0 1 2-2h8l3 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#e8b84a"/><path d="M1 8h28v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#f5c95c"/></svg>';
   const FILE = '<svg class="ic" viewBox="0 0 30 24"><path d="M9 1h9l5 5v16a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" fill="#dfe4ee"/><path d="M18 1v5h5" fill="#b9c0cf"/><path d="M11 12h9M11 15h9M11 18h6" stroke="#8a93a6" stroke-width="1.2"/></svg>';
   const IMG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="2" fill="#7aa7ff"/><circle cx="11" cy="8" r="2.5" fill="#fff"/><path d="M5 19l6-6 4 4 3-3 7 7H5z" fill="#2d4f9e"/></svg>';
-  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k) ?? k;
-
+  const PROG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="3" fill="#c792ea"/><path d="M11 9l-3 3 3 3M19 9l3 3-3 3" stroke="#fff" stroke-width="1.6" fill="none"/></svg>';
+  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k) ?? k;
+  const shown = (line, p) => line.replace('‹texte›', JSON.stringify(p.text ?? ''));
   function el(cls, style, html) { const d = document.createElement('div'); d.className = cls; if (style) d.style.cssText = style; if (html != null) d.innerHTML = html; return d; }
+  function highlight(code) {
+    const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return esc.replace(/("[^"]*")/g, '<span class="st">$1</span>').replace(/\b(import|as|for|in)\b/g, '<span class="kw">$1</span>').replace(/\b(print|range|Tk|Label|Button|pack|mainloop)\b/g, '<span class="fn">$1</span>').replace(/\b(\d+)\b/g, '<span class="nu">$1</span>');
+  }
 
   function render(e, p = {}) {
     const L = $('layer');
     L.textContent = '';
-    // Dock
-    L.append(el('dock', pct(4, 7, 4, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
+    L.append(el('dock', pct(3, 7, 5, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
     for (const [x, app] of Object.entries(DOCK)) {
       const d = el('dicon' + (e.open.includes(app) ? ' on' : ''), pct(+x, 7), `<div class="tile" style="background:${TILE[app]}">${ICON[app]}</div>`);
       if (app === 'corbeille' && e.trash.length) d.append(el('badge', '', String(e.trash.length)));
-      d.title = app;
       L.append(d);
     }
-    // Fenêtres, de l'arrière vers l'avant
     const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
     order.forEach((app, i) => {
       const W = LAYOUT[app], z = 10 + i * 5;
       const win = el('win' + (e.focus === app ? ' focus' : ''), pct(W.x0, W.y0, W.x1 - W.x0 + 1, W.y1 - W.y0 + 1) + `;z-index:${z}`);
-      const title = app === 'terminal' ? `agent@linux: ${e.cwd.replace(HOME, '~')}` : app === 'fichiers' ? 'Fichiers' : `${e.ed.name || 'Sans titre'} — Éditeur de texte`;
-      const hb = el('hb', '', ''); hb.textContent = title;
-      win.append(hb);
+      const title = { terminal: `agent@linux: ${e.cwd.replace(HOME, '~')}`, fichiers: 'Fichiers', editeur: `${e.ed.name || 'Sans titre'} — Éditeur`, code: 'Atelier de code — programme.py', bac: `Bac à sable${e.ran ? ' — ' + e.ran.from : ''}` }[app];
+      const hb = el('hb'); hb.textContent = title;
       const body = el('wbody');
-      win.append(body);
+      win.append(hb, body);
       L.append(win);
-      const [cx, cy] = W.close;
-      L.append(el('wbtn', pct(cx, cy) + `;z-index:${z + 1};height:auto;aspect-ratio:auto;top:calc(${cy / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
+      L.append(el('wbtn', pct(...W.close) + `;z-index:${z + 1};height:auto;top:calc(${W.close[1] / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
       if (app === 'terminal') {
         const t = el('term');
         for (const { line, err } of e.term.slice(-12)) { const d = document.createElement('div'); d.textContent = line; if (err) d.className = 'err'; t.append(d); }
         const ps = el('ps', '', '<b></b>$ <i></i><span class="caret"></span>');
         ps.querySelector('b').textContent = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' ';
-        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ');
+        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ').replace('./ ', './');
         t.append(ps);
         body.append(t);
       }
       if (app === 'fichiers') {
-        const path = el('path'); path.textContent = e.fm.replace(HOME, '~ (dossier personnel)');
+        const path = el('path'); path.textContent = e.fm.replace(HOME, '~');
         hb.append(path);
         L.append(el('wbtn', pct(...W.up) + `;z-index:${z + 1}`, '<div class="pill">↑ Parent</div>'));
         L.append(el('wbtn', pct(...W.bin) + `;z-index:${z + 1}`, '<div class="pill red">Corbeille</div>'));
         e.list(e.fm).slice(0, W.items.length).forEach((name, k) => {
-          const [ix, iy] = W.items[k], dir = e.isDir(e.fm + '/' + name);
-          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (dir ? FOLDER : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
+          const [ix, iy] = W.items[k], f = e.fs.get(e.fm + '/' + name);
+          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (f.d ? FOLDER : f.prog ? PROG : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
           it.querySelector('span').textContent = name;
           L.append(it);
         });
@@ -257,80 +272,100 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
       if (app === 'editeur') {
         const paper = el('paper'); paper.textContent = e.ed.text;
         body.append(paper);
-        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px;box-sizing:border-box;border:1px solid ${e.focus === 'editeur' ? 'rgba(255,181,71,0.55)' : 'rgba(255,255,255,0.07)'};border-top:0`);
+        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px`);
         if (e.ed.saving) { foot.innerHTML = 'Enregistrer sous : <span class="namebox"></span>'; foot.querySelector('.namebox').textContent = e.ed.nameBuf || ''; }
         else foot.textContent = e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré';
         L.append(foot);
         L.append(el('wbtn', pct(...W.save) + `;z-index:${z + 2}`, '<div class="pill blue">Enregistrer</div>'));
       }
+      if (app === 'code') {
+        const cb = el('codebody');
+        if (!e.code.length) cb.append(el('empty', '', 'Programme vide. Les lignes s’ajoutent depuis la palette de code.'));
+        e.code.forEach((line, k) => { const ln = el('ln', '', `<b>${k + 1}</b><span>${highlight(shown(line, p))}</span>`); cb.append(ln); });
+        const st = el('codestatus');
+        const rs = runStatus(e.run);
+        st.textContent = !e.run ? 'Pas encore exécuté' : e.run.error ? e.run.error : e.run.win && !e.run.win.shown ? 'La fenêtre s’est fermée tout de suite (il manque mainloop ?)' : rs.startsWith('fenetre') ? 'Fenêtre ouverte dans le bac à sable' + (e.run.late ? ' (des lignes après mainloop() ne s’exécuteront qu’à la fermeture)' : '') : `Sortie : ${e.run.out.join(' ') || '(rien)'}`;
+        st.classList.add(e.run?.error ? 'err' : e.run ? 'ok' : 'x');
+        cb.append(st);
+        body.append(cb);
+        L.append(el('wbtn', pct(...W.run) + `;z-index:${z + 1}`, '<div class="pill blue" title="Exécuter">▶ Lancer</div>'));
+        L.append(el('wbtn', pct(...W.build) + `;z-index:${z + 1}`, '<div class="pill" title="Construire un .exe">.exe</div>'));
+        L.append(el('wbtn', pct(...W.neu) + `;z-index:${z + 1}`, '<div class="pill">Nouveau</div>'));
+      }
+      if (app === 'bac') {
+        const bb = el('bacbody');
+        const r = e.ran;
+        if (!r) bb.append(el('', '', 'En attente d’un programme.'));
+        else {
+          r.out.forEach(o => { const d = document.createElement('div'); d.textContent = o; bb.append(d); });
+          if (r.error) { const d = el('err'); d.textContent = r.error; bb.append(d); }
+          else if (r.win && r.win.shown) {
+            const tk = el('tkwin', '', '<div class="tt"><span>tk</span><span>✕</span></div><div class="tc"></div>');
+            for (const lab of r.win.labels) { const d = document.createElement('div'); d.textContent = lab; tk.lastChild.append(d); }
+            for (let i = 0; i < r.win.buttons; i++) tk.lastChild.append(el('tb', '', 'Quitter'));
+            if (!r.win.labels.length && !r.win.buttons) tk.lastChild.append(el('', 'color:#777;font-size:.85em', '(fenêtre vide)'));
+            bb.append(tk);
+          } else if (r.win) bb.append(el('', 'color:var(--dim)', 'La fenêtre s’est ouverte puis refermée aussitôt.'));
+          else if (!r.out.length) bb.append(el('', 'color:var(--dim)', '(le programme n’a rien affiché)'));
+        }
+        body.append(bb);
+      }
     });
-    placeCursor(e);
-  }
-
-  function placeCursor(e) {
     $('cursor').style.left = ((e.cx + 0.5) / COLS * 100) + '%';
     $('cursor').style.top = ((e.cy + 0.5) / ROWS * 100) + '%';
     $('hover').style.cssText = pct(e.cx, e.cy);
   }
 
-  // ---------- Animation d'un geste ----------
+  // ---------- Animation ----------
   let speed = 3;
   const sleep = ms => new Promise(r => setTimeout(r, ms / speed));
-  function bubble(text, ms = 1800) {
+  function bubble(text, ms = 2000) {
     const b = $('bubble');
-    b.textContent = text;
-    b.style.left = '3%'; b.style.top = '6%';
+    b.textContent = text; b.style.left = '3%'; b.style.top = '6%';
     b.classList.add('show');
     clearTimeout(bubble.t);
     bubble.t = setTimeout(() => b.classList.remove('show'), ms / speed);
   }
   function keycap(text) {
     const k = $('keycap');
-    k.textContent = text;
-    k.classList.add('show');
+    k.textContent = text; k.classList.add('show');
     clearTimeout(keycap.t);
-    keycap.t = setTimeout(() => k.classList.remove('show'), 500 / speed);
-  }
-  function describe(e, a, p) {
-    const act = ACTIONS[a];
-    if (act.length === 1) return { move: true };
-    if (act === 'clic') {
-      const h = e.hit(e.cx, e.cy);
-      const what = h.kind === 'dock' ? `l’icône ${h.app}` : h.kind === 'close' ? `fermer ${h.app}` : h.kind === 'item' ? h.name : h.kind === 'bin' ? 'Corbeille' : h.kind === 'up' ? 'Parent' : h.kind === 'save' ? 'Enregistrer' : h.kind === 'win' ? `la fenêtre ${h.app}` : 'le vide';
-      return { text: 'clic sur ' + what };
-    }
-    return { text: '⌨ ' + word(act.slice(7), p) };
+    keycap.t = setTimeout(() => k.classList.remove('show'), 600 / speed);
   }
 
-  async function gesture(e, a, p, animate) {
-    const d = describe(e, a, p);
-    const useful = e.step(a, p);
-    if (animate) {
-      const act = ACTIONS[a];
-      if (act === 'clic') { const c = $('cursor'); c.classList.remove('click'); void c.offsetWidth; c.classList.add('click'); }
-      else if (!d.move) keycap(word(act.slice(7), p));
-      render(e, p);
-      await sleep(d.move ? 110 : 260);
+  // La main amène le curseur sur l'objet visé, case par case, puis clique
+  async function reach(e, c, p, animate) {
+    for (let k = 0; k < 30; k++) {
+      const m = hand.pick(e, c, 0.02);
+      if (m === 4) {
+        const useful = e.step(4, p);
+        if (animate) { const cu = $('cursor'); cu.classList.remove('click'); void cu.offsetWidth; cu.classList.add('click'); render(e, p); await sleep(200); }
+        return useful;
+      }
+      e.step(m, p);
+      if (animate) { render(e, p); await sleep(90); }
     }
-    return { useful, d };
+    return false;
   }
 
-  // Joue un objectif avec ce que l'agent a appris (presque sans hasard)
-  async function perform(e, task, p, animate = true, maxSteps = 60) {
+  async function perform(e, task, p, animate = true, maxSteps = 25) {
     const log = [];
-    let moves = 0;
-    const flush = () => { if (moves) { log.push(`curseur ×${moves}`); moves = 0; } };
     for (let n = 0; n < maxSteps; n++) {
-      const s = observe(e, task, p);
-      const a = brain.choose(s, 0.05);
-      const { useful, d } = await gesture(e, a, p, animate);
-      if (d.move) moves++; else { flush(); log.push((useful ? '' : '✗ ') + d.text); }
-      // Il continue d'apprendre pendant qu'il est seul : un geste inutile perd de la valeur, il ne le répète pas
-      const ok = task.done(e, p);
-      brain.learn(s, a, ok ? 1 : (useful ? -0.01 : -0.04) + 0.97 * brain.maxq(observe(e, task, p)));
-      if (ok) { flush(); return { ok: true, log, n: n + 1 }; }
+      const s = headState(e, task, p), C = choices(e, p), c = head.choose(s, C, 0.03, false);
+      let useful;
+      if (c.kind === 'touche') {
+        useful = e.step(ACTIONS.indexOf('touche ' + c.d), p);
+        if (animate) { keycap(c.d.startsWith('‹') ? word(c.d, p) : shown(c.d, p)); render(e, p); await sleep(320); }
+        log.push((useful ? '' : '✗ ') + '⌨ ' + (c.d.startsWith('‹') ? word(c.d, p) : shown(c.d, p)));
+      } else {
+        useful = await reach(e, c, p, animate);
+        log.push((useful ? '' : '✗ ') + '🖱 ' + c.d);
+      }
+      const ok = !!task.done(e, p);
+      // Il continue d'apprendre pendant qu'il est seul
+      head.learn(s, c, ok ? 1 : (useful ? -0.02 : -0.06) + 0.95 * head.maxq(headState(e, task, p), choices(e, p), false));
+      if (ok) return { ok: true, log, n: n + 1 };
     }
-    flush();
     return { ok: false, log, n: maxSteps };
   }
 
@@ -339,80 +374,92 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 
   // ---------- Entraînement ----------
   function renderSkills() {
-    $('skills').textContent = '';
-    let total = 0;
+    const box = $('skills');
+    box.textContent = '';
+    const hr = el('skill', '', `<b>La main : viser et cliquer</b><div class="bar"><i style="width:${Math.round(hand.rate() * 100)}%"></i></div><span>${hand.trained ? Math.round(hand.rate() * 100) + ' %' : '–'}</span>`);
+    box.append(hr);
+    let cat = '', total = 0;
     for (const t of TASKS) {
-      const st = brain.stats[t.id];
+      if (t.cat !== cat) { cat = t.cat; box.append(el('cat', '', cat)); }
+      const st = head.stats[t.id];
       const rate = st.wins.length ? st.wins.filter(Boolean).length / st.wins.length : 0;
-      const okSteps = st.steps.filter((_, i) => st.wins[i]);
-      const avg = okSteps.length ? Math.round(okSteps.reduce((a, b) => a + b, 0) / okSteps.length) : '–';
       total += rate;
-      const row = el('skill', '', `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${avg} gestes</span>`);
+      const row = el('skill', '', `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${st.tries ? Math.round(rate * 100) + ' %' : '–'}</span>`);
       row.querySelector('b').textContent = t.label;
-      $('skills').append(row);
+      box.append(row);
     }
     const m = total / TASKS.length;
-    $('level').textContent = brain.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${brain.trained.toLocaleString('fr-FR')} essais`;
+    $('level').textContent = head.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${head.trained.toLocaleString('fr-FR')} essais`;
   }
 
   $('train').addEventListener('click', () => {
     if (busy) return;
     lock(true);
-    const total = 105000, chunk = 1500;
+    const total = 240000, chunk = 2000;
     let done = 0;
-    bubble('Je m’entraîne…', 3000);
+    hand.train(4000);
+    bubble('Je m’entraîne… regarde mes compétences monter.', 4000);
     (function next() {
-      brain.train(chunk); done += chunk;
+      head.train(chunk); done += chunk;
       $('progress').firstChild.style.width = (done / total * 100) + '%';
       renderSkills();
       if (done < total) setTimeout(next, 0);
       else { lock(false); bubble('Entraînement terminé. Regarde-moi faire !'); }
     })();
   });
-  $('forget').addEventListener('click', () => {
-    brain = new Brain();
-    $('progress').firstChild.style.width = '0';
-    renderSkills();
-  });
+  $('forget').addEventListener('click', () => { hand = new Hand(); head = new Head(); $('progress').firstChild.style.width = '0'; renderSkills(); });
 
-  for (const t of TASKS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; $('taskSel').append(o); }
+  let cat = '', group = null;
+  for (const t of TASKS) {
+    if (t.cat !== cat) { cat = t.cat; group = document.createElement('optgroup'); group.label = cat; $('taskSel').append(group); }
+    const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; group.append(o);
+  }
   $('show').addEventListener('click', async () => {
     if (busy) return;
     lock(true);
     const task = T[$('taskSel').value];
     const e = new Env().reset(true);
+    if (task.setup) task.setup(e);
     render(e, task.p);
     bubble('Objectif : ' + task.label.toLowerCase());
     await sleep(900);
     const r = await perform(e, task, task.p, true);
-    bubble(r.ok ? `Réussi en ${r.n} gestes !` : 'Raté… il faut encore m’entraîner.');
+    bubble(r.ok ? `Réussi en ${r.n} décision${r.n > 1 ? 's' : ''} !` : 'Raté… il faut encore m’entraîner.');
     lock(false);
   });
 
   // ---------- Mode libre ----------
-  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'voyages', 'robots', 'archives'];
-  const FILES = ['memo.txt', 'plan.txt', 'poeme.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'robots'];
+  const FILES = ['memo.txt', 'plan.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  const APPS = ['robot.exe', 'bonjour.exe', 'outil.exe', 'jeu.exe'];
+  const SAY = ['Bonjour le monde', 'Je sais coder !', 'Salut, humain', 'Vive Linux'];
   function chooseGoal(e, mem) {
     const home = e.list(HOME);
+    const isFile = n => !e.isDir(HOME + '/' + n);
     const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
     const newDir = DIRS.filter(d => !home.includes(d));
-    const newFile = FILES.filter(f => !home.includes(f) && !mem.made.has(f));
-    const mine = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
-    const junk = home.filter(n => !e.isDir(HOME + '/' + n) && (n.endsWith('.png') || (mem.made.has(n) && mem.read.has(n))));
+    const newFile = FILES.filter(f => !home.includes(f));
+    const myDirs = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
+    const exes = home.filter(n => n.endsWith('.exe') && !mem.launched.has(n));
     const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
-    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je suis curieux : que contient ${f} ?` }); }
-    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je me fais un dossier « ${d} ».` }); }
-    if (mine.length && newFile.length) { const d = pick(mine), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans mon dossier ${d}.` }); }
-    if (newFile.length) { const f = pick(newFile); c.push({ t: 'write', p: { file: f, text: compose(e, mem) }, why: `J’écris quelque chose dans ${f}.` }); }
-    if (junk.length) { const f = pick(junk); c.push({ t: 'trash', p: { file: f }, why: `${f} ne me sert plus, je le jette.` }); }
-    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6;
+    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je lis ${f}.` }); }
+    const readable = home.filter(n => n.endsWith('.txt') && e.fs.get(HOME + '/' + n).c);
+    if (readable.length) { const f = pick(readable), w = pick(e.fs.get(HOME + '/' + f).c.split(/[^\p{L}]+/u).filter(x => x.length > 3)); if (w) c.push({ t: 'grep', p: { file: f, word: w }, why: `Je cherche « ${w} » dans ${f} avec grep.` }); }
+    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je crée un dossier « ${d} ».` }); }
+    if (myDirs.length && newFile.length) { const d = pick(myDirs), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans ${d}.` }); }
+    if (newFile.length) { const f = pick(newFile); c.push({ t: 'echo', p: { file: f, text: pick(['coder', 'apprendre', 'dormir']) }, why: `J’écris une note dans ${f} avec echo.` }); }
+    const loose = home.filter(n => isFile(n) && (n.endsWith('.png') || n.endsWith('.txt')));
+    if (loose.length && myDirs.length) { const f = pick(loose), d = pick(myDirs); c.push({ t: pick(['cp', 'mv']), p: { file: f, dir: d }, why: `Je range ${f} dans ${d}.` }); }
+    if (home.includes('hello.py') && !mem.launched.has('hello.py')) c.push({ t: 'py', p: { file: 'hello.py' }, why: 'Il y a un script hello.py : je le lance avec python3.' });
+    c.push({ t: 'c-print', p: { text: pick(SAY) }, why: 'J’écris un petit programme qui affiche une phrase.' });
+    c.push({ t: 'c-count', p: {}, why: 'J’essaie une boucle qui compte jusqu’à 5.' });
+    c.push({ t: 'c-tk', p: { text: pick(SAY) }, why: 'Je fabrique une fenêtre avec tkinter.' });
+    c.push({ t: 'c-btn', p: {}, why: 'Je fais une fenêtre avec un bouton.' });
+    const newApp = APPS.filter(a => !home.includes(a));
+    if (newApp.length) { const a = pick(newApp); c.push({ t: 'c-exe', p: { file: a, text: pick(SAY) }, why: `Je construis mon application ${a}.` }); }
+    if (exes.length) { const x = pick(exes); c.push({ t: 'exe', p: { file: x }, why: `Je lance ${x} (chmod +x puis ./).` }); }
+    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6 + (g.t === 'exe' ? 0.5 : 0);
     return c.sort((a, b) => b.score - a.score)[0];
-  }
-  function compose(e, mem) {
-    const ideas = [`J'ai ${e.list(HOME).length} choses dans mon dossier.`, 'Bonjour, je suis un petit agent.', 'Aujourd hui j apprends Linux.'];
-    if (mem.seen.notes) ideas.push('A acheter : ' + mem.seen.notes.split(':')[1].trim());
-    if (mem.dirs.size) ideas.push('Mes dossiers : ' + [...mem.dirs].join(', '));
-    return pick(ideas);
   }
 
   $('free').addEventListener('click', async () => {
@@ -421,36 +468,37 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     $('journal').textContent = '';
     const e = new Env().reset(false);
     render(e);
-    if (!brain.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
-    const mem = { read: new Set(), made: new Set(), dirs: new Set(), count: {}, seen: {} };
-    let wins = 0, gestures = 0;
-    for (let i = 0; i < 10; i++) {
+    if (!head.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
+    const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
+    let wins = 0, decisions = 0;
+    for (let i = 0; i < 12; i++) {
       const g = chooseGoal(e, mem);
       const min = 9 * 60 + i * 4, clock = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
       $('clock').textContent = clock;
-      bubble(g.why, 2200);
+      bubble(g.why, 2400);
       await sleep(800);
+      e.run = null; e.ran = null;
       const r = await perform(e, T[g.t], g.p, true);
-      gestures += r.n;
+      decisions += r.n;
       mem.count[g.t] = (mem.count[g.t] || 0) + 1;
       if (r.ok) {
         wins++;
-        if (g.t === 'cat') { mem.read.add(g.p.file); mem.seen[g.p.file.replace('.txt', '')] = e.fs.get(HOME + '/' + g.p.file)?.c; }
+        if (g.t === 'cat') mem.read.add(g.p.file);
         if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
-        if (g.t === 'write' || g.t === 'touch') mem.made.add(g.p.file);
+        if (g.t === 'exe' || g.t === 'py') mem.launched.add(g.p.file);
       }
       const item = document.createElement('li');
       item.className = r.ok ? 'ok' : 'ko';
       item.innerHTML = '<b></b> <span></span><br><code></code>';
       item.querySelector('b').textContent = clock;
-      item.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.n} geste${r.n > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
+      item.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.n} décision${r.n > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
       item.querySelector('code').textContent = r.log.join(' → ');
       $('journal').append(item);
       $('journal').scrollTop = $('journal').scrollHeight;
     }
     const sum = document.createElement('li');
     sum.className = 'sum';
-    sum.textContent = `Bilan : 10 objectifs choisis tout seul, ${wins} réussis, ${gestures} gestes. Dossier final : ${e.list(HOME).join(', ')}. Corbeille : ${e.trash.map(t => t.name).join(', ') || 'vide'}.`;
+    sum.textContent = `Bilan : 12 objectifs choisis tout seul, ${wins} réussis, ${decisions} décisions. Dossier final : ${e.list(HOME).join(', ')}.`;
     $('journal').append(sum);
     $('journal').scrollTop = $('journal').scrollHeight;
     lock(false);
@@ -462,11 +510,14 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
   }));
   $('gridToggle').addEventListener('change', ev => $('desk').classList.toggle('show-grid', ev.target.checked));
 
-  // État de départ : un bureau avec le gestionnaire de fichiers ouvert
+  // État de départ : l'atelier de code et le bac à sable montrent un exemple
   const start = new Env().reset(false);
-  start.open = ['fichiers', 'terminal']; start.focus = 'terminal';
+  start.open = ['terminal', 'fichiers', 'code']; start.focus = 'code';
+  start.code = ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'fen.mainloop()'];
+  start.run = start.launch(start.code, 'Exemple', 'atelier');
   start.term.push({ line: 'Bienvenue sur le bureau de l’agent.' });
-  render(start);
+  render(start, { text: 'Exemple' });
   renderSkills();
+  window.__agent = { get head() { return head; } };
 })();
 </script>
