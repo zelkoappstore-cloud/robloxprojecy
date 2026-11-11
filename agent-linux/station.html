@@ -1,0 +1,1259 @@
+<title>Poste de l'agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Ambiance sombre unique : la scène 3D occupe l'écran, un bandeau d'état en haut, le journal en bas à droite */
+:root {
+  --bg: #0b0d12;
+  --panel: rgba(16, 20, 28, 0.88);
+  --line: #2a3242;
+  --text: #e6e9ef;
+  --dim: #8a93a6;
+  --accent: #ffb547;
+  --ok: #63d68a;
+  --bad: #ff6b6b;
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); overflow: hidden; }
+#scene { position: fixed; inset: 0; }
+#scene canvas { display: block; width: 100%; height: 100%; }
+header {
+  position: fixed; z-index: 2; top: env(safe-area-inset-top, 0px); left: 0; right: 0;
+  padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; pointer-events: none;
+}
+h1 { margin: 0; font-size: 18px; font-weight: 600; }
+h1 span { color: var(--accent); }
+.controls { display: flex; gap: 6px; flex-wrap: wrap; pointer-events: auto; }
+button { font: inherit; font-size: 13px; color: var(--text); background: #0f131a; border: 1px solid var(--line); border-radius: 9px; padding: 6px 11px; cursor: pointer; }
+button:hover { border-color: var(--dim); }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#status { font-family: var(--mono); font-size: 12px; color: var(--dim); width: 100%; }
+#status b { color: var(--accent); font-weight: 600; }
+#bubble {
+  position: fixed; z-index: 3; left: 50%; top: calc(86px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 32px)); background: var(--accent); color: #1a1406; font-weight: 500; font-size: 14px;
+  padding: 8px 14px; border-radius: 14px; opacity: 0; transition: opacity 0.25s; pointer-events: none; text-align: center;
+}
+#bubble.show { opacity: 1; }
+#logbox {
+  position: fixed; z-index: 2; width: min(360px, calc(100% - 32px));
+  right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(10px);
+  padding: 12px 14px; display: grid; gap: 8px;
+}
+#logbox h2 { margin: 0; font-size: 12px; font-family: var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; }
+#score { color: var(--accent); }
+#journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 170px; overflow-y: auto; font-size: 12px; line-height: 1.4; }
+#journal:empty::before { content: "Le journal se remplit dès qu’il commence à travailler."; color: var(--dim); }
+#journal li { border-left: 3px solid var(--line); padding-left: 8px; }
+#journal li.ok { border-color: var(--ok); }
+#journal li.ko { border-color: var(--bad); }
+@media (max-width: 640px) { #journal { max-height: 96px; } }
+</style>
+
+<div id="scene" aria-label="L'agent robot devant son ordinateur 3D, dont l'écran montre son bureau Linux simulé"></div>
+<header>
+  <h1>Poste de l’<span>agent</span></h1>
+  <div class="controls">
+    <button id="pause" aria-pressed="false">Pause</button>
+    <button data-sp="1" aria-pressed="true">×1</button>
+    <button data-sp="2" aria-pressed="false">×2</button>
+    <button data-sp="4" aria-pressed="false">×4</button>
+  </div>
+  <div id="status">action : <b id="anim">repos</b> · <span id="phase">démarrage</span></div>
+</header>
+<div id="bubble"></div>
+<aside id="logbox">
+  <h2>Journal <span id="score">0 / 0</span></h2>
+  <ol id="journal"></ol>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Monde et cerveau du petit agent Linux.
+// Aucune action toute faite : une souris (bouger d'une case, cliquer) et un clavier de mots.
+// Le terminal, l'éditeur, l'atelier de code et le bac à sable sont simulés en JavaScript.
+(function (root) {
+  const HOME = '/home/agent';
+  const COLS = 12, ROWS = 8;
+  const TERM_KEYS = ['ls', 'pwd', 'mkdir', 'cd', 'cd ..', 'touch', 'cat', 'rm', 'cp', 'mv', 'grep', 'echo', '>', 'chmod +x', 'python3', './', '‹dossier›', '‹fichier›', '‹texte›', '‹mot›', 'Entrée', 'Effacer'];
+  const CODE_KEYS = ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'tk.Button(fen, text="Quitter").pack()', 'fen.mainloop()', 'print(‹texte›)', 'for i in range(1, 6):', '    print(i)', '⌫ ligne'];
+  const KEYS = [...TERM_KEYS, ...CODE_KEYS];
+  const ACTIONS = ['↑', '↓', '←', '→', 'clic', ...KEYS.map(k => 'touche ' + k)];
+  const ARGS = ['‹dossier›', '‹fichier›', '‹texte›', '‹mot›'];
+
+  const LAYOUT = {
+    terminal: { x0: 0, x1: 6, y0: 1, y1: 3, close: [6, 1] },
+    fichiers: { x0: 7, x1: 11, y0: 1, y1: 4, close: [11, 1], up: [7, 2], bin: [11, 2], items: [[7, 3], [8, 3], [9, 3], [10, 3], [11, 3], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4]] },
+    editeur: { x0: 1, x1: 6, y0: 4, y1: 6, close: [6, 4], save: [6, 6] },
+    code: { x0: 0, x1: 6, y0: 1, y1: 5, close: [6, 1], run: [5, 1], build: [4, 1], neu: [3, 1] },
+    bac: { x0: 7, x1: 11, y0: 5, y1: 6, close: [11, 5] }
+  };
+  const DOCK = { 3: 'terminal', 4: 'fichiers', 5: 'editeur', 6: 'code', 7: 'corbeille' };
+  const rnd = n => Math.random() * n | 0;
+  const pick = a => a[rnd(a.length)];
+
+  // ---------- Mini-Python : exécute les lignes que l'agent a écrites ----------
+  function runProgram(lines, p) {
+    const out = [], g = { tk: false, fen: null };
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      const err = (type, msg) => ({ out, error: `${type} (ligne ${i + 1}) : ${msg}`, etype: type, win: null });
+      if (L === '    print(i)') return err('IndentationError', 'indentation inattendue');
+      if (L === 'for i in range(1, 6):') {
+        if (lines[i + 1] !== '    print(i)') return err('IndentationError', 'un bloc indenté était attendu');
+        for (let k = 1; k <= 5; k++) out.push(String(k));
+        i++;
+        continue;
+      }
+      if (L === 'print(‹texte›)') { out.push(p.text ?? ''); continue; }
+      if (L === 'import tkinter as tk') { g.tk = true; continue; }
+      if (L === 'fen = tk.Tk()') { if (!g.tk) return err('NameError', "le nom 'tk' n'est pas défini"); g.fen = { labels: [], buttons: 0, shown: false }; continue; }
+      if (L.startsWith('tk.Label') || L.startsWith('tk.Button')) {
+        if (!g.tk) return err('NameError', "le nom 'tk' n'est pas défini");
+        if (!g.fen) return err('NameError', "le nom 'fen' n'est pas défini");
+        if (g.fen.shown) { g.late = true; continue; }
+        if (L.startsWith('tk.Label')) g.fen.labels.push(p.text ?? ''); else g.fen.buttons++;
+        continue;
+      }
+      if (L === 'fen.mainloop()') { if (!g.fen) return err('NameError', "le nom 'fen' n'est pas défini"); g.fen.shown = true; continue; }
+    }
+    return { out, error: null, etype: null, win: g.fen, late: !!g.late };
+  }
+  // Résumé d'une exécution, tel que l'agent le perçoit
+  function runStatus(r) {
+    if (!r) return 'jamais';
+    if (r.error) return r.etype;
+    if (r.win && !r.win.shown) return 'fenetre-fermee';
+    if (r.win) return 'fenetre' + (r.win.labels.length ? '+texte' : '') + (r.win.buttons ? '+bouton' : '') + (r.late ? '+apres' : '');
+    return r.out.length ? 'sortie' + r.out.length : 'rien';
+  }
+
+  class Env {
+    reset(random = false) {
+      this.fs = new Map([
+        [HOME, { d: 1 }], [HOME + '/Documents', { d: 1 }], [HOME + '/Images', { d: 1 }],
+        [HOME + '/notes.txt', { c: 'liste de courses : pain, pommes, café' }],
+        [HOME + '/photo.png', { c: '(image)' }],
+        [HOME + '/hello.py', { c: '', prog: ['print(‹texte›)'], ptext: 'Bonjour depuis hello.py' }],
+        [HOME + '/Documents/recette.txt', { c: 'crêpes : farine, œufs, lait' }]
+      ]);
+      this.cwd = HOME; this.fm = HOME; this.open = []; this.focus = null; this.sel = null;
+      this.ed = { text: '', name: null, saving: false, nameBuf: null };
+      this.buf = []; this.term = []; this.lastCmd = null; this.read = null; this.grep = null; this.trash = [];
+      this.code = []; this.run = null; this.ran = null; this.built = null; this.cx = 6; this.cy = 3;
+      if (random) {
+        if (Math.random() < 0.5) this.fs.set(HOME + '/projets', { d: 1 });
+        for (const app of ['terminal', 'fichiers', 'editeur', 'code']) if (Math.random() < 0.28) this.open.push(app);
+        this.focus = this.open.length ? pick(this.open) : null;
+        const r = Math.random();
+        if (r < 0.2) this.cwd = HOME + '/Documents';
+        else if (r < 0.45 && this.fs.has(HOME + '/projets')) this.cwd = HOME + '/projets';
+        if (this.open.includes('editeur')) this.ed.text = pick(['', 'brouillon', 'bonjour']);
+        // Départs variés : parfois des lignes de code ou une commande déjà commencées, tirées au hasard (souvent fausses)
+        if (this.open.includes('code') && Math.random() < 0.6) { const n = 1 + rnd(5); for (let i = 0; i < n; i++) this.code.push(pick(CODE_KEYS.slice(0, -1))); }
+        if (this.focus === 'terminal' && Math.random() < 0.3) { this.buf.push(pick(CMD_WORDS)); if (Math.random() < 0.5) this.buf.push(pick(ARG_WORDS.slice(0, 4))); }
+        this.cx = rnd(COLS); this.cy = rnd(ROWS);
+      }
+      return this;
+    }
+    isDir(p) { return this.fs.get(p)?.d === 1; }
+    list(dir) {
+      const pre = dir + '/';
+      return [...this.fs.keys()].filter(k => k.startsWith(pre) && !k.slice(pre.length).includes('/')).map(k => k.slice(pre.length)).sort();
+    }
+    say(line, err) { this.term.push({ line, err }); if (this.term.length > 60) this.term.shift(); }
+    hit(x, y) {
+      if (y === 7 && DOCK[x]) return { kind: 'dock', app: DOCK[x] };
+      const order = [...this.open].sort((a, b) => (a === this.focus) - (b === this.focus)).reverse();
+      for (const app of order) {
+        const L = LAYOUT[app];
+        if (x < L.x0 || x > L.x1 || y < L.y0 || y > L.y1) continue;
+        if (x === L.close[0] && y === L.close[1]) return { kind: 'close', app };
+        if (app === 'fichiers') {
+          if (x === L.up[0] && y === L.up[1]) return { kind: 'up', app };
+          if (x === L.bin[0] && y === L.bin[1]) return { kind: 'bin', app };
+          const k = L.items.findIndex(([ix, iy]) => ix === x && iy === y);
+          if (k >= 0) { const name = this.list(this.fm)[k]; if (name) return { kind: 'item', app, name }; }
+        }
+        if (app === 'editeur' && x === L.save[0] && y === L.save[1]) return { kind: 'save', app };
+        if (app === 'code' && x === L.run[0] && y === L.run[1]) return { kind: 'run', app };
+        if (app === 'code' && x === L.build[0] && y === L.build[1]) return { kind: 'build', app };
+        if (app === 'code' && x === L.neu[0] && y === L.neu[1]) return { kind: 'new', app };
+        return { kind: 'win', app };
+      }
+      return { kind: 'desk' };
+    }
+    focusApp(app) {
+      if (!this.open.includes(app)) {
+        this.open.push(app);
+        if (app === 'editeur') this.ed = { text: '', name: null, saving: false, nameBuf: null };
+      }
+      this.focus = app;
+    }
+    // Lance un programme dans le bac à sable
+    launch(prog, ptext, from) {
+      const r = runProgram(prog, { text: ptext });
+      r.from = from;
+      this.ran = r;
+      if (!this.open.includes('bac')) this.open.push('bac');
+      return r;
+    }
+    exec(p) {
+      const t = this.buf, w = t.map(k => k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k);
+      this.buf = [];
+      const line = w.map(x => x ?? '?').join(' ').replace('./ ', './');
+      this.say('$ ' + line);
+      const fail = msg => { this.say(msg, 1); return false; };
+      if (w.some(x => x == null)) return fail(`${line} : argument manquant`);
+      const is = (...pattern) => t.length === pattern.length && pattern.every((k, i) => k === t[i] || (k === 'F' && t[i] === '‹fichier›') || (k === 'D' && t[i] === '‹dossier›'));
+      const at = name => this.cwd + '/' + name;
+      if (is('ls')) { this.say(this.list(this.cwd).join('  ') || '(vide)'); this.lastCmd = 'ls:' + this.cwd; return true; }
+      if (is('pwd')) { this.say(this.cwd); return true; }
+      if (is('cd ..')) { if (this.cwd !== HOME) this.cwd = this.cwd.slice(0, this.cwd.lastIndexOf('/')); return true; }
+      if (is('mkdir', 'D')) { const path = at(w[1]); if (this.fs.has(path)) return fail(`mkdir: « ${w[1]} » existe déjà`); this.fs.set(path, { d: 1 }); return true; }
+      if (is('cd', 'D')) { if (this.isDir(at(w[1]))) { this.cwd = at(w[1]); return true; } return fail(`cd: ${w[1]}: aucun dossier de ce nom`); }
+      if (is('touch', 'F')) { if (!this.fs.has(at(w[1]))) this.fs.set(at(w[1]), { c: '' }); return true; }
+      if (is('cat', 'F')) { const f = this.fs.get(at(w[1])); if (f && !f.d) { this.say(f.prog ? f.prog.join('\n') : (f.c || '(vide)')); this.read = at(w[1]); return true; } return fail(`cat: ${w[1]}: introuvable`); }
+      if (is('rm', 'F')) { if (this.fs.has(at(w[1])) && !this.isDir(at(w[1]))) { this.fs.delete(at(w[1])); return true; } return fail(`rm: ${w[1]}: introuvable`); }
+      if (is('cp', 'F', 'D') || is('mv', 'F', 'D')) {
+        const src = at(w[1]), dst = at(w[2]);
+        if (!this.fs.has(src) || this.isDir(src)) return fail(`${w[0]}: ${w[1]}: introuvable`);
+        if (!this.isDir(dst)) return fail(`${w[0]}: ${w[2]}: aucun dossier de ce nom`);
+        this.fs.set(dst + '/' + w[1], { ...this.fs.get(src) });
+        if (w[0] === 'mv') this.fs.delete(src);
+        return true;
+      }
+      if (is('grep', '‹mot›', 'F')) {
+        const f = this.fs.get(at(w[2]));
+        if (!f || f.d) return fail(`grep: ${w[2]}: introuvable`);
+        const hits = (f.prog ? f.prog.join('\n') : f.c).split('\n').filter(l => l.includes(w[1]));
+        hits.forEach(h => this.say(h));
+        if (hits.length) this.grep = at(w[2]) + '#' + w[1];
+        return true;
+      }
+      if (is('echo', '‹texte›', '>', 'F')) { this.fs.set(at(w[3]), { c: w[1] }); return true; }
+      if (is('chmod +x', 'F')) { const f = this.fs.get(at(w[1])); if (!f || f.d) return fail(`chmod: ${w[1]}: introuvable`); f.x = true; return true; }
+      if (is('python3', 'F') || is('./', 'F')) {
+        const f = this.fs.get(at(w[1]));
+        if (!f || f.d) return fail(`${line}: fichier introuvable`);
+        if (w[0] === './' && !f.x) return fail(`bash: ${line}: Permission refusée`);
+        if (w[0] === 'python3' && !w[1].endsWith('.py')) return fail(`python3: ${w[1]} n'est pas un script Python`);
+        if (!f.prog) return fail(`${line}: ce n'est pas un programme`);
+        const r = this.launch(f.prog, f.ptext, w[1]);
+        r.out.forEach(o => this.say(o));
+        if (r.error) this.say(r.error, 1);
+        return !r.error;
+      }
+      return fail(`${line || '(rien)'} : commande inconnue`);
+    }
+    step(ai, p) {
+      const a = ACTIONS[ai];
+      if (a === '↑') { if (this.cy === 0) return false; this.cy--; return true; }
+      if (a === '↓') { if (this.cy === ROWS - 1) return false; this.cy++; return true; }
+      if (a === '←') { if (this.cx === 0) return false; this.cx--; return true; }
+      if (a === '→') { if (this.cx === COLS - 1) return false; this.cx++; return true; }
+      if (a === 'clic') {
+        const h = this.hit(this.cx, this.cy);
+        if (h.kind === 'dock') { if (h.app === 'corbeille') return false; this.focusApp(h.app); return true; }
+        if (h.kind === 'close') { this.open = this.open.filter(x => x !== h.app); if (this.focus === h.app) this.focus = this.open.filter(x => x !== 'bac').pop() || null; return true; }
+        if (h.kind === 'desk') return false;
+        if (h.kind === 'win') { if (h.app === 'bac' || this.focus === h.app) return false; this.focus = h.app; return true; }
+        if (h.app !== 'bac') this.focus = h.app;
+        if (h.kind === 'item') { this.sel = h.name; return true; }
+        if (h.kind === 'up') { if (this.fm === HOME) return false; this.fm = this.fm.slice(0, this.fm.lastIndexOf('/')); this.sel = null; return true; }
+        if (h.kind === 'bin') {
+          const path = this.fm + '/' + this.sel;
+          if (!this.sel || !this.fs.has(path) || this.isDir(path)) return false;
+          this.trash.push({ name: this.sel, c: this.fs.get(path).c }); this.fs.delete(path); this.sel = null; return true;
+        }
+        if (h.kind === 'save') { if (!this.ed.text) return false; this.ed.saving = true; this.ed.nameBuf = null; return true; }
+        if (h.kind === 'new') { if (!this.code.length) return false; this.code = []; this.run = null; return true; }
+        if (h.kind === 'run') { if (!this.code.length) return false; this.run = this.launch(this.code, p.text, 'atelier'); return true; }
+        if (h.kind === 'build') {
+          if (!this.code.length || !p.file) return false;
+          const r = runProgram(this.code, p);
+          r.from = 'build';
+          this.run = r;
+          if (r.error) return false;
+          this.fs.set(HOME + '/' + p.file, { c: '', prog: [...this.code], ptext: p.text, x: false });
+          this.built = p.file;
+          return true;
+        }
+        return true;
+      }
+      const key = a.slice(7);
+      const isCode = CODE_KEYS.includes(key);
+      if (this.focus === 'code') {
+        if (!isCode) return false;
+        if (key === '⌫ ligne') { if (!this.code.length) return false; this.code.pop(); this.run = null; return true; }
+        if (this.code.length >= 6) return false;
+        this.code.push(key); this.run = null; return true;
+      }
+      if (isCode) return false;
+      if (this.focus === 'terminal') {
+        if (key === 'Entrée') return this.buf.length ? this.exec(p) : false;
+        if (key === 'Effacer') { const had = this.buf.length > 0; this.buf = []; return had; }
+        if (this.buf.length >= 4) return false;
+        if (key === '‹dossier›' && !p.dir) return false;
+        if (key === '‹fichier›' && !p.file) return false;
+        if (key === '‹texte›' && !p.text) return false;
+        if (key === '‹mot›' && !p.word) return false;
+        this.buf.push(key); return true;
+      }
+      if (this.focus === 'editeur') {
+        if (this.ed.saving) {
+          if (key === '‹fichier›' && p.file) { this.ed.nameBuf = p.file; return true; }
+          if (key === 'Entrée' && this.ed.nameBuf) { this.fs.set(HOME + '/' + this.ed.nameBuf, { c: this.ed.text }); this.ed.name = this.ed.nameBuf; this.ed.saving = false; this.ed.nameBuf = null; return true; }
+          if (key === 'Effacer') { this.ed.saving = false; this.ed.nameBuf = null; return true; }
+          return false;
+        }
+        if (key === '‹texte›' && p.text) { this.ed.text = p.text; return true; }
+        if (key === 'Effacer' && this.ed.text) { this.ed.text = ''; return true; }
+        return false;
+      }
+      return false;
+    }
+  }
+
+  const fget = (e, path) => e.fs.get(HOME + '/' + path);
+  const TASKS = [
+    { id: 'term', cat: 'Bureau', label: 'Ouvrir le terminal', p: {}, done: e => e.focus === 'terminal' },
+    { id: 'write', cat: 'Bureau', label: 'Écrire et enregistrer un texte', p: { file: 'lettre.txt', text: 'bonjour' }, done: (e, p) => fget(e, p.file)?.c === p.text },
+    { id: 'trash', cat: 'Bureau', label: 'Mettre un fichier à la corbeille', p: { file: 'photo.png' }, done: (e, p) => !fget(e, p.file) },
+    { id: 'ls', cat: 'Commandes', label: 'ls : lister le dossier', p: {}, done: e => e.lastCmd === 'ls:' + HOME },
+    { id: 'mkdir', cat: 'Commandes', label: 'mkdir : créer un dossier', p: { dir: 'projets' }, done: (e, p) => e.isDir(HOME + '/' + p.dir) },
+    { id: 'touch', cat: 'Commandes', label: 'cd + touch : fichier dans un dossier', p: { dir: 'projets', file: 'idee.txt' }, done: (e, p) => { const x = fget(e, p.dir + '/' + p.file); return !!x && !x.d; } },
+    { id: 'cat', cat: 'Commandes', label: 'cat : lire un fichier', p: { file: 'notes.txt' }, done: (e, p) => e.read === HOME + '/' + p.file },
+    { id: 'cp', cat: 'Commandes', label: 'cp : copier dans un dossier', p: { file: 'notes.txt', dir: 'Documents' }, done: (e, p) => { const a = fget(e, p.dir + '/' + p.file), b = fget(e, p.file); return !!a && !!b && a.c === b.c && String(a.prog) === String(b.prog); } },
+    { id: 'mv', cat: 'Commandes', label: 'mv : déplacer dans un dossier', p: { file: 'photo.png', dir: 'Images' }, done: (e, p) => !!fget(e, p.dir + '/' + p.file) && !fget(e, p.file) },
+    { id: 'grep', cat: 'Commandes', label: 'grep : chercher un mot', p: { file: 'notes.txt', word: 'pain' }, done: (e, p) => e.grep === `${HOME}/${p.file}#${p.word}` },
+    { id: 'echo', cat: 'Commandes', label: 'echo > : écrire dans un fichier', p: { file: 'todo.txt', text: 'coder' }, done: (e, p) => fget(e, p.file)?.c === p.text },
+    { id: 'py', cat: 'Commandes', label: 'python3 : lancer un script', p: { file: 'hello.py' }, done: (e, p) => e.ran?.from === p.file && !e.ran.error },
+    { id: 'exe', cat: 'Commandes', label: 'chmod +x puis ./ : lancer un .exe', p: { file: 'app.exe' },
+      setup: e => e.fs.set(HOME + '/app.exe', { c: '', prog: ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'fen.mainloop()'], ptext: 'Mon appli', x: Math.random() < 0.3 }),
+      done: (e, p) => e.ran?.from === p.file && !e.ran.error },
+    { id: 'c-print', cat: 'Code', label: 'Programme qui affiche un texte', p: { text: 'Bonjour' }, done: (e, p) => e.run?.from === 'atelier' && !e.run.error && !e.run.win && e.run.out.join('|') === p.text },
+    { id: 'c-count', cat: 'Code', label: 'Programme qui compte de 1 à 5', p: {}, done: e => e.run?.from === 'atelier' && !e.run.error && !e.run.win && e.run.out.join('') === '12345' },
+    { id: 'c-tk', cat: 'Code', label: 'Fenêtre tkinter avec un texte', p: { text: 'Salut !' }, done: (e, p) => e.run?.from === 'atelier' && !e.run.error && e.run.win?.shown && e.run.win.labels.includes(p.text) },
+    { id: 'c-btn', cat: 'Code', label: 'Fenêtre tkinter avec un bouton', p: {}, done: e => e.run?.from === 'atelier' && !e.run.error && e.run.win?.shown && e.run.win.buttons > 0 },
+    { id: 'c-exe', cat: 'Code', label: 'Construire un .exe avec fenêtre', p: { file: 'appli.exe', text: 'Mon appli' }, done: (e, p) => e.built === p.file && e.run?.win?.shown }
+  ];
+
+  // ---------- Perception : les objets visibles à l'écran ----------
+  function elements(e, p) {
+    const out = [];
+    for (const [x, app] of Object.entries(DOCK)) if (app !== 'corbeille') out.push({ d: 'icône ' + app, x: +x, y: 7 });
+    for (const app of e.open) {
+      const L = LAYOUT[app];
+      out.push({ d: 'fermer ' + app, x: L.close[0], y: L.close[1] });
+      if (app !== 'bac') out.push({ d: 'fenêtre ' + app, x: L.close[0] - 1, y: L.y0 + 1 });
+      if (app === 'fichiers') {
+        out.push({ d: 'bouton Parent', x: L.up[0], y: L.up[1] }, { d: 'bouton Corbeille', x: L.bin[0], y: L.bin[1] });
+        e.list(e.fm).slice(0, L.items.length).forEach((name, k) => {
+          if (name === p.file) out.push({ d: 'fichier visé', x: L.items[k][0], y: L.items[k][1] });
+          else if (!out.some(o => o.d === 'autre fichier')) out.push({ d: 'autre fichier', x: L.items[k][0], y: L.items[k][1] });
+        });
+      }
+      if (app === 'editeur') out.push({ d: 'bouton Enregistrer', x: L.save[0], y: L.save[1] });
+      if (app === 'code') out.push({ d: 'bouton Exécuter', x: L.run[0], y: L.run[1] }, { d: 'bouton Construire .exe', x: L.build[0], y: L.build[1] }, { d: 'bouton Nouveau', x: L.neu[0], y: L.neu[1] });
+    }
+    // On ne garde que ce qui n'est pas caché par une autre fenêtre
+    return out.filter(o => { const h = e.hit(o.x, o.y); return o.d.startsWith('icône') || (h.app && o.d.endsWith(h.app)) || h.kind === 'item' || ['up', 'bin', 'save', 'run', 'build', 'new'].includes(h.kind); });
+  }
+
+  // ---------- La main : amener le curseur sur un objet et cliquer ----------
+  const MOVES = ['↑', '↓', '←', '→', 'clic'];
+  class Hand {
+    constructor() { this.Q = new Map(); this.trained = 0; this.wins = []; }
+    key(e, t) { const c = v => Math.max(-4, Math.min(4, v)); return c(t.x - e.cx) + ',' + c(t.y - e.cy); }
+    row(k) { let r = this.Q.get(k); if (!r) { r = new Float32Array(5); this.Q.set(k, r); } return r; }
+    pick(e, t, eps) { const r = this.row(this.key(e, t)); if (Math.random() < eps) return rnd(5); let b = 0; for (let i = 1; i < 5; i++) if (r[i] > r[b] || (r[i] === r[b] && Math.random() < 0.3)) b = i; return b; }
+    train(count) {
+      for (let n = 0; n < count; n++) {
+        const e = { cx: rnd(COLS), cy: rnd(ROWS) }, t = { x: rnd(COLS), y: rnd(ROWS) };
+        const eps = Math.max(0.05, 1 - this.trained / 3000);
+        let ok = false;
+        for (let k = 0; k < 40 && !ok; k++) {
+          const s = this.key(e, t), a = this.pick(e, t, eps);
+          let r = -0.01;
+          if (a === 0) e.cy = Math.max(0, e.cy - 1); if (a === 1) e.cy = Math.min(ROWS - 1, e.cy + 1);
+          if (a === 2) e.cx = Math.max(0, e.cx - 1); if (a === 3) e.cx = Math.min(COLS - 1, e.cx + 1);
+          if (a === 4) { if (e.cx === t.x && e.cy === t.y) { r = 1; ok = true; } else r = -0.05; }
+          const row = this.row(s), nx = ok ? 0 : Math.max(...this.row(this.key(e, t)));
+          row[a] += 0.5 * (r + 0.95 * nx - row[a]);
+        }
+        this.trained++; this.wins.push(ok); if (this.wins.length > 100) this.wins.shift();
+      }
+    }
+    rate() { return this.wins.length ? this.wins.filter(Boolean).length / this.wins.length : 0; }
+  }
+
+  // ---------- La tête : décider quoi viser ou quoi taper ----------
+  // Ce que la tête sait de la situation
+  function headState(e, task, p) {
+    const fl = p.file ? e.fs.get(e.cwd + '/' + p.file) : null;
+    const flags = [
+      +(e.cwd === HOME),
+      p.dir ? +e.isDir(HOME + '/' + p.dir) : '',
+      p.dir ? +(e.cwd === HOME + '/' + p.dir) : '',
+      p.file ? (fl ? (fl.x ? 'x' : '1') : '0') : '',
+      task.id === 'trash' ? +(e.sel === p.file) + (e.fm === HOME ? 'h' : 'a') : '',
+      task.id === 'write' ? +(e.ed.text === p.text) + '' + +e.ed.saving + (e.ed.nameBuf ? 1 : 0) : '',
+      task.id === 'exe' || task.id === 'py' ? (e.ran ? (e.ran.error ? 'err' : 'ok') : '-') : ''
+    ].join('');
+    // Il ne regarde que ce qui compte pour l'objectif : le programme pour du code, la ligne de commande pour le terminal
+    const typed = task.cat === 'Code' ? e.code.map(l => CODE_KEYS.indexOf(l)).join('.') + '|' + runStatus(e.run) : task.cat === 'Commandes' ? e.buf.join(',') : '';
+    return task.id + '|' + (e.focus || '-') + '|' + flags + '|' + typed;
+  }
+  // Le clavier proposé dépend de ce qui est au premier plan, avec une autocomplétion comme dans un vrai terminal :
+  // ligne vide -> les commandes ; commande commencée -> les arguments, > , Entrée et Effacer
+  const CMD_WORDS = TERM_KEYS.filter(k => !['‹dossier›', '‹fichier›', '‹texte›', '‹mot›', '>', 'Entrée', 'Effacer'].includes(k));
+  const ARG_WORDS = ['‹dossier›', '‹fichier›', '‹texte›', '‹mot›', '>', 'Entrée', 'Effacer'];
+  const keysFor = e => e.focus === 'terminal' ? (e.buf.length ? ARG_WORDS : CMD_WORDS) : e.focus === 'editeur' ? ['‹texte›', '‹fichier›', 'Entrée', 'Effacer'] : e.focus === 'code' ? CODE_KEYS : [];
+  function choices(e, p) { return [...elements(e, p).map(o => ({ kind: 'viser', ...o })), ...keysFor(e).map(k => ({ kind: 'touche', d: k }))]; }
+  // Applique une décision. En entraînement la main est supposée réussir (elle s'entraîne à part)
+  function applyChoice(e, c, p) {
+    if (c.kind === 'touche') return e.step(ACTIONS.indexOf('touche ' + c.d), p);
+    e.cx = c.x; e.cy = c.y;
+    return e.step(4, p);
+  }
+
+  // Les objectifs les plus longs reviennent plus souvent à l'entraînement
+  const WEIGHT = { touch: 6, write: 2, exe: 3, cp: 3, mv: 3, grep: 3, echo: 4, py: 2, 'c-print': 2, 'c-count': 3, 'c-tk': 5, 'c-btn': 7, 'c-exe': 3 };
+  const ORDER = TASKS.flatMap((t, i) => Array(WEIGHT[t.id] || 1).fill(i));
+
+  class Head {
+    constructor() { this.Q = new Map(); this.stats = {}; this.trained = 0; this.carry = null; for (const t of TASKS) this.stats[t.id] = { tries: 0, wins: [], steps: [] }; }
+    row(s) { let r = this.Q.get(s); if (!r) { r = new Map(); this.Q.set(s, r); } return r; }
+    // Optimisme : une décision jamais essayée paraît prometteuse, il a envie de la tester
+    q(s, c, opt = true) { const v = this.row(s).get(c.d); return v === undefined ? (opt ? 0.3 : 0) : v; }
+    best(s, C, opt = true) { let b = C[0], vb = this.q(s, b, opt), n = 1; for (const c of C.slice(1)) { const v = this.q(s, c, opt); if (v > vb + 1e-9) { b = c; vb = v; n = 1; } else if (Math.abs(v - vb) < 1e-9 && Math.random() < 1 / ++n) b = c; } return b; }
+    maxq(s, C, opt = true) { let m = -Infinity; for (const c of C) m = Math.max(m, this.q(s, c, opt)); return C.length ? m : 0; }
+    // En entraînement il est optimiste (il veut tout essayer) ; seul, il s'en tient à ce qu'il sait
+    choose(s, C, eps, opt = true) { return Math.random() < eps ? pick(C) : this.best(s, C, opt); }
+    learn(s, c, target, lr = 0.5) { const r = this.row(s), q = r.has(c.d) ? r.get(c.d) : target; r.set(c.d, q + lr * (target - q)); }
+    episode(task, eps, maxSteps = 25, update = true) {
+      const e = new Env().reset(true), p = task.p, path = [];
+      if (task.setup) task.setup(e);
+      // Parfois, il garde son bureau tel qu'il l'a laissé (fenêtres, code, commande commencée)
+      const c0 = this.carry;
+      if (c0 && Math.random() < 0.4) {
+        Object.assign(e, { open: [...c0.open], focus: c0.focus, code: [...c0.code], buf: [...c0.buf], run: c0.run, ran: c0.ran, cx: c0.cx, cy: c0.cy, ed: { ...c0.ed, saving: false, nameBuf: null } });
+        if (!e.isDir(c0.cwd)) e.cwd = HOME; else e.cwd = c0.cwd;
+      }
+      let n = 0, ok = false;
+      while (n < maxSteps) {
+        const s = headState(e, task, p), C = choices(e, p), c = this.choose(s, C, eps);
+        const useful = applyChoice(e, c, p);
+        n++;
+        ok = !!task.done(e, p);
+        const s1 = headState(e, task, p);
+        path.push([s, c, (ok ? 1 : useful ? -0.02 : -0.06) , s1, choices(e, p), ok]);
+        if (ok) break;
+      }
+      this.carry = e;
+      if (update) for (let i = path.length - 1; i >= 0; i--) {
+        const [s0, c, r, s1, C1, end] = path[i];
+        this.learn(s0, c, r + (end ? 0 : 0.95 * this.maxq(s1, C1)));
+      }
+      return { ok, n };
+    }
+    train(count) {
+      for (let k = 0; k < count; k++) {
+        const task = TASKS[pick(ORDER)], st = this.stats[task.id];
+        const r = this.episode(task, Math.max(0.03, 0.3 - st.tries / 6000));
+        st.tries++; st.wins.push(r.ok); st.steps.push(r.n);
+        if (st.wins.length > 60) { st.wins.shift(); st.steps.shift(); }
+        this.trained++;
+      }
+    }
+  }
+
+  root.AgentLinux = { Hand, Head, elements, choices, applyChoice, headState, keysFor, MOVES, HOME, COLS, ROWS, KEYS, TERM_KEYS, CODE_KEYS, ACTIONS, LAYOUT, DOCK, Env, TASKS, pick, rnd, runProgram, runStatus };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mount = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  mount.append(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d12);
+  scene.fog = new THREE.Fog(0x0b0d12, 9, 18);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 50);
+
+  // ---------- Lumières ----------
+  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.75));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
+  key.position.set(3, 5, 4); key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024); key.shadow.camera.near = 1; key.shadow.camera.far = 15;
+  Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 });
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffb547, 0.9); rim.position.set(-4, 2, -3); scene.add(rim);
+  const fill = new THREE.PointLight(0x4fd6e3, 0.5, 8); fill.position.set(3.6, -2.6, 0.4); scene.add(fill);
+
+  // Sol : un disque qui reçoit l'ombre, avec un halo dessiné sur une texture
+  const haloTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 10, 128, 128, 128);
+    gr.addColorStop(0, 'rgba(255,181,71,0.22)'); gr.addColorStop(0.5, 'rgba(79,214,227,0.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+  })();
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = -1.9; scene.add(halo);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(3.4, 64), new THREE.ShadowMaterial({ opacity: 0.35 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -1.89; ground.receiveShadow = true; scene.add(ground);
+
+  // ---------- Matériaux ----------
+  const M = {
+    shell: new THREE.MeshStandardMaterial({ color: 0xe9edf2, roughness: 0.35, metalness: 0.1 }),
+    shellDark: new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.5, metalness: 0.4 }),
+    visor: new THREE.MeshStandardMaterial({ color: 0x07090d, roughness: 0.38, metalness: 0.25, emissive: 0xffffff, emissiveIntensity: 1 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0x4fd6e3, emissive: 0x4fd6e3, emissiveIntensity: 0.9, roughness: 0.3 }),
+    accent: new THREE.MeshStandardMaterial({ color: 0xffb547, emissive: 0xff9a1f, emissiveIntensity: 0.6, roughness: 0.35 }),
+    glove: new THREE.MeshStandardMaterial({ color: 0xf6f7fa, roughness: 0.55, metalness: 0.02 }),
+    key: new THREE.MeshStandardMaterial({ color: 0x232a36, roughness: 0.6 }),
+    keyTop: new THREE.MeshStandardMaterial({ color: 0x2f3747, roughness: 0.5 })
+  };
+  const shadowy = m => { m.castShadow = true; return m; };
+
+  // ---------- La tête ----------
+  const agent = new THREE.Group(); scene.add(agent);
+  const head = new THREE.Group(); agent.add(head);
+  const skull = shadowy(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), M.shell));
+  skull.scale.set(1.08, 0.98, 1); head.add(skull);
+  // Visière : une calotte sombre posée sur l'avant de la tête
+  // Dans three.js, l'angle phi = π/2 pointe vers l'avant (+z) : la visière est centrée là
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(1.012, 64, 32, Math.PI / 2 - 0.78, 1.56, Math.PI * 0.26, Math.PI * 0.44), M.visor);
+  visor.scale.copy(skull.scale); head.add(visor);
+  // ---------- Le visage : un écran LED dessiné en direct sur la visière ----------
+  const faceCanvas = document.createElement('canvas');
+  faceCanvas.width = 512; faceCanvas.height = 448;
+  const fx = faceCanvas.getContext('2d');
+  const faceTex = new THREE.CanvasTexture(faceCanvas);
+  faceTex.encoding = THREE.sRGBEncoding;
+  faceTex.anisotropy = 4;
+  M.visor.emissiveMap = faceTex;
+  M.visor.needsUpdate = true;
+  // Fond de l'écran : une trame de petits points, comme des pixels éteints
+  const dots = (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 448;
+    const g = c.getContext('2d');
+    g.fillStyle = '#040608'; g.fillRect(0, 0, 512, 448);
+    g.fillStyle = 'rgba(120, 160, 200, 0.07)';
+    for (let y = 6; y < 448; y += 12) for (let x = 6; x < 512; x += 12) { g.beginPath(); g.arc(x, y, 1.6, 0, Math.PI * 2); g.fill(); }
+    const v = g.createRadialGradient(256, 224, 120, 256, 224, 330);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    g.fillStyle = v; g.fillRect(0, 0, 512, 448);
+    return c;
+  })();
+
+  // Toutes les expressions sont décrites par quelques réglages, qui glissent en douceur de l'une à l'autre
+  const EXPR = {
+    calme:     { open: 1, w: 1, h: 1, brow: 0, browY: 0, mouth: 0.55, mopen: 0, mw: 1, blush: 0.25, hue: [79, 214, 227] },
+    content:   { open: 0.9, w: 1.05, h: 0.95, brow: -0.1, browY: 4, mouth: 1, mopen: 0.45, mw: 1.15, blush: 0.6, hue: [79, 214, 227] },
+    concentre: { open: 0.62, w: 1.05, h: 0.9, brow: 0.22, browY: 10, mouth: 0.05, mopen: 0, mw: 0.6, blush: 0, hue: [79, 214, 227] },
+    pense:     { open: 0.95, w: 0.95, h: 1, brow: -0.25, browY: -6, mouth: -0.15, mopen: 0.1, mw: 0.45, blush: 0, hue: [140, 190, 255] },
+    joie:      { open: 1, w: 1.1, h: 1, brow: -0.2, browY: -4, mouth: 1, mopen: 1, mw: 1.3, blush: 1, hue: [126, 240, 160], happy: 1 },
+    erreur:    { open: 0.8, w: 1, h: 0.9, brow: 0.6, browY: 12, mouth: -0.8, mopen: 0.3, mw: 0.9, blush: 0, hue: [255, 107, 107], wave: 1 }
+  };
+  const face = { open: 1, w: 1, h: 1, brow: 0, browY: 0, mouth: 0.5, mopen: 0, mw: 1, blush: 0, hue: [79, 214, 227], happy: 0, wave: 0, lookX: 0, lookY: 0 };
+
+  function roundRectPath(g, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+
+  function drawFace(t, blinkK) {
+    const g = fx, F = face, col = `rgb(${F.hue.map(Math.round).join(',')})`;
+    g.drawImage(dots, 0, 0);
+    g.save();
+    g.shadowColor = col; g.shadowBlur = 34;
+    g.fillStyle = col; g.strokeStyle = col; g.lineCap = 'round'; g.lineJoin = 'round';
+    const cy = 196 + F.lookY * 14, open = F.open * blinkK;
+    for (const s of [-1, 1]) {
+      const cx = 256 + s * 112 + F.lookX * 22;
+      const ew = 92 * F.w, eh = 136 * F.h;
+      if (F.happy > 0.5) {
+        // Yeux en arc : ^ ^
+        g.lineWidth = 22;
+        g.beginPath(); g.arc(cx, cy + 28, 56 * F.w, Math.PI * 1.12, Math.PI * 1.88); g.stroke();
+      } else {
+        const h = Math.max(8, eh * open);
+        g.save();
+        roundRectPath(g, cx - ew / 2, cy - h / 2, ew, h, ew / 2);
+        g.fill();
+        // Paupière en colère : on coupe le haut de l'œil en biais
+        if (F.brow > 0.3) {
+          g.globalCompositeOperation = 'destination-out'; g.shadowBlur = 0;
+          g.beginPath(); g.moveTo(cx - ew, cy - h / 2 - 30 + (s > 0 ? 34 : -6) * F.brow); g.lineTo(cx + ew, cy - h / 2 - 30 + (s > 0 ? -6 : 34) * F.brow); g.lineTo(cx + ew, cy - h); g.lineTo(cx - ew, cy - h); g.closePath(); g.fill();
+        }
+        g.restore();
+        // Pupille sombre et reflet blanc, qui suivent le regard
+        if (h > 30) {
+          g.save(); g.shadowBlur = 0;
+          const px = cx + F.lookX * 12, py = cy + F.lookY * 10 + 6;
+          g.fillStyle = 'rgba(4, 8, 12, 0.9)';
+          g.beginPath(); g.ellipse(px, py, ew * 0.3, Math.min(h * 0.32, ew * 0.38), 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(255,255,255,0.95)';
+          g.beginPath(); g.arc(px + ew * 0.13, py - Math.min(h * 0.14, 18), 9, 0, Math.PI * 2); g.fill();
+          g.beginPath(); g.arc(px - ew * 0.1, py + Math.min(h * 0.1, 10), 3.5, 0, Math.PI * 2); g.fill();
+          g.restore();
+        }
+      }
+      // Sourcils
+      g.lineWidth = 12;
+      const by = cy - 96 - F.browY + (F.happy > 0.5 ? 6 : 0), tilt = F.brow * 26 * s;
+      g.beginPath(); g.moveTo(cx - 40, by - tilt * (s > 0 ? -1 : 1) * 0.5 + (s < 0 ? tilt : 0)); g.quadraticCurveTo(cx, by - 8 - Math.abs(F.brow) * 2, cx + 40, by + (s > 0 ? tilt : 0) - tilt * (s < 0 ? -1 : 1) * 0.5); g.stroke();
+    }
+    // Bouche : courbe plus ou moins souriante, ouverte quand il est content
+    const my = 340, mw = 84 * F.mw, curve = F.mouth * 40;
+    g.lineWidth = 14;
+    if (F.wave > 0.5) {
+      g.beginPath();
+      for (let i = 0; i <= 24; i++) { const x = 256 - mw + (2 * mw * i) / 24, y = my + 10 + Math.sin(i / 24 * Math.PI * 4 + t * 10) * 7; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.stroke();
+    } else if (F.mopen > 0.15) {
+      g.beginPath(); g.moveTo(256 - mw, my); g.quadraticCurveTo(256, my + curve * 1.4 + F.mopen * 30, 256 + mw, my); g.quadraticCurveTo(256, my + curve * 0.3, 256 - mw, my); g.closePath(); g.fill();
+      g.save(); g.shadowBlur = 0; g.fillStyle = 'rgba(255, 120, 150, 0.85)';
+      g.beginPath(); g.ellipse(256, my + curve * 0.75 + F.mopen * 12, mw * 0.35, 8 + F.mopen * 6, 0, 0, Math.PI); g.fill(); g.restore();
+    } else {
+      g.beginPath(); g.moveTo(256 - mw, my); g.quadraticCurveTo(256, my + curve, 256 + mw, my); g.stroke();
+    }
+    g.restore();
+    // Joues roses
+    if (F.blush > 0.02) {
+      for (const s of [-1, 1]) {
+        const gr = g.createRadialGradient(256 + s * 178, 300, 2, 256 + s * 178, 300, 52);
+        gr.addColorStop(0, `rgba(255, 120, 160, ${0.55 * F.blush})`); gr.addColorStop(1, 'rgba(255, 120, 160, 0)');
+        g.fillStyle = gr; g.fillRect(256 + s * 178 - 56, 244, 112, 112);
+      }
+    }
+    // Fines lignes de balayage qui défilent, pour l'effet écran
+    g.fillStyle = 'rgba(255,255,255,0.025)';
+    const off = (t * 40) % 8;
+    for (let y = off; y < 448; y += 8) g.fillRect(0, y, 512, 2);
+    faceTex.needsUpdate = true;
+  }
+
+  // Oreilles et antenne
+  for (const s of [-1, 1]) {
+    const ear = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.16, 32), M.shellDark));
+    ear.rotation.z = Math.PI / 2; ear.position.set(1.08 * s, 0, 0); head.add(ear);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.03, 10, 32), M.accent);
+    ring.rotation.y = Math.PI / 2; ring.position.set(1.17 * s, 0, 0); head.add(ring);
+  }
+  const antenna = new THREE.Group(); antenna.position.set(0, 0.96, 0); head.add(antenna);
+  antenna.add(shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.42, 12), M.shellDark)));
+  antenna.children[0].position.y = 0.2;
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 16), M.accent); tip.position.y = 0.46; antenna.add(tip);
+
+  // ---------- Les mains ----------
+  // Chaque main : une paume, quatre doigts à deux phalanges et un pouce. Toutes les articulations peuvent se plier.
+  function makeHand(side) {
+    const hand = new THREE.Group();
+    const wrist = new THREE.Group(); hand.add(wrist);
+    const cuff = shadowy(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.07, 12, 32), M.accent));
+    cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.36; wrist.add(cuff);
+    const palm = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), M.glove));
+    palm.scale.set(1, 1.05, 0.55); wrist.add(palm);
+    const fingers = [];
+    const spread = [-0.17, -0.055, 0.06, 0.17], lens = [0.17, 0.2, 0.19, 0.15];
+    spread.forEach((x, i) => {
+      const base = new THREE.Group(); base.position.set(x * side, 0.26, 0); base.rotation.z = -x * side * 0.6; wrist.add(base);
+      const seg = (len, parent) => {
+        const piv = new THREE.Group(); parent.add(piv);
+        const bone = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.062, len, 14), M.glove)); bone.position.y = len / 2; piv.add(bone);
+        const knuckle = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), M.glove)); piv.add(knuckle);
+        const end = new THREE.Group(); end.position.y = len; piv.add(end);
+        return { piv, end };
+      };
+      const a = seg(lens[i], base), b = seg(lens[i] * 0.85, a.end);
+      const tipBall = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.058, 14, 10), M.glove)); b.end.add(tipBall);
+      fingers.push({ a: a.piv, b: b.piv, tip: b.end });
+    });
+    const thumbBase = new THREE.Group(); thumbBase.position.set(0.24 * side, 0.02, 0.06); thumbBase.rotation.z = -1.0 * side; wrist.add(thumbBase);
+    const tA = new THREE.Group(); thumbBase.add(tA);
+    const tb = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.07, 0.2, 14), M.glove)); tb.position.y = 0.1; tA.add(tb);
+    const tt = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.066, 14, 10), M.glove)); tt.position.y = 0.2; tA.add(tt);
+    agent.add(hand);
+    return { hand, wrist, fingers, thumb: tA, side, pos: new THREE.Vector3(), rot: new THREE.Euler(), curl: [0, 0, 0, 0], thumbCurl: 0 };
+  }
+  const hands = { L: makeHand(-1), R: makeHand(1) };
+
+  // Petit clavier qui apparaît quand il tape
+  const keyboard = new THREE.Group();
+  const kbBase = shadowy(new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.08, 0.8), M.key)); keyboard.add(kbBase);
+  const keys = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 11; c++) {
+    const k = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.16), M.keyTop));
+    k.position.set(-1.0 + c * 0.2 + (r % 2) * 0.05, 0.065, -0.22 + r * 0.22);
+    keyboard.add(k); keys.push(k);
+  }
+  keyboard.position.set(0, -1.25, 1.15); keyboard.rotation.x = 0.15; keyboard.scale.setScalar(0.001); scene.add(keyboard);
+
+  // ---------- Poses : où vont les mains, comment se plient les doigts ----------
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const E = (x, y, z) => new THREE.Euler(x, y, z);
+  // Petits outils de mouvement : bruit doux (somme de sinus) et impulsion arrondie pour les frappes
+  const wobble = (t, seed, amp) => amp * (Math.sin(t * 1.3 + seed) * 0.6 + Math.sin(t * 2.1 + seed * 1.7) * 0.3 + Math.sin(t * 3.7 + seed * 0.4) * 0.1);
+  const pulse = (phase, width = 0.35) => { const x = ((phase % 1) + 1) % 1; return x < width ? Math.sin((x / width) * Math.PI) ** 2 : 0; };
+
+  // Orientation des mains : les doigts suivent l'axe +y de la main et se plient vers +z.
+  // Pour taper, on tourne la main de +90° autour de x : doigts vers l'avant, paume tournée vers le clavier.
+  const POSES = {
+    repos: t => ({
+      L: { p: V(-1.55 + wobble(t, 1, 0.04), -0.5 + wobble(t * 0.9, 2, 0.08), 0.35 + wobble(t, 3, 0.04)), r: E(0.1 + wobble(t, 4, 0.06), 0.3, 0.25 + wobble(t, 5, 0.06)), curl: [0.35, 0.3, 0.32, 0.38], thumb: 0.2 },
+      R: { p: V(1.55 + wobble(t, 6, 0.04), -0.5 + wobble(t * 0.9, 7, 0.08), 0.35 + wobble(t, 8, 0.04)), r: E(0.1 + wobble(t, 9, 0.06), -0.3, -0.25 + wobble(t, 10, 0.06)), curl: [0.38, 0.32, 0.3, 0.35], thumb: 0.2 },
+      head: E(wobble(t * 0.6, 11, 0.06), wobble(t * 0.45, 12, 0.22), wobble(t * 0.5, 13, 0.03)), mood: 'calme'
+    }),
+    saluer: t => {
+      const w = Math.sin(t * 7.5);
+      return {
+        L: { p: V(-1.5, -0.6 + wobble(t, 1, 0.05), 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
+        R: { p: V(1.4 + w * 0.08, 0.8 + Math.abs(w) * 0.05, 0.5), r: E(-0.1, -0.25, -0.15 + w * 0.5), curl: [0.05 + Math.max(0, -w) * 0.15, 0.03, 0.05, 0.1], thumb: 0.05 },
+        head: E(-0.05, -0.2, w * 0.05), mood: 'content'
+      };
+    },
+    taper: t => {
+      // Chaque doigt frappe à son tour, avec un rythme un peu irrégulier comme une vraie frappe
+      const tl = i => pulse(t * 3.1 + [0, 0.27, 0.55, 0.78][i] + Math.sin(t * 0.7) * 0.1, 0.22);
+      const tr = i => pulse(t * 3.4 + [0.12, 0.4, 0.66, 0.9][i] + Math.sin(t * 0.9) * 0.1, 0.22);
+      const bobL = Math.max(...[0, 1, 2, 3].map(tl)), bobR = Math.max(...[0, 1, 2, 3].map(tr));
+      return {
+        L: { p: V(-0.48 + Math.sin(t * 1.1) * 0.06, -0.86 - bobL * 0.05, 0.62), r: E(1.42, 0.12, 0.08), curl: [0, 1, 2, 3].map(i => 0.45 + tl(i) * 0.55), thumb: 0.35 },
+        R: { p: V(0.48 + Math.sin(t * 1.3 + 1) * 0.06, -0.86 - bobR * 0.05, 0.62), r: E(1.42, -0.12, -0.08), curl: [0, 1, 2, 3].map(i => 0.45 + tr(i) * 0.55), thumb: 0.35 },
+        head: E(0.34 + Math.sin(t * 1.7) * 0.02, Math.sin(t * 0.8) * 0.08, 0), mood: 'concentre', keyboard: true, taps: [tl, tr]
+      };
+    },
+    cliquer: t => {
+      const cyc = (t * 0.9) % 1, poke = cyc < 0.18 ? Math.sin((cyc / 0.18) * Math.PI) : 0;
+      return {
+        L: { p: V(-1.5, -0.6 + wobble(t, 2, 0.05), 0.4), r: E(0.1, 0.3, 0.25), curl: [0.55, 0.55, 0.55, 0.55], thumb: 0.4 },
+        R: { p: V(0.95, -0.55, 0.95 + poke * 0.35), r: E(1.25 - poke * 0.1, -0.3, 0), curl: [0.02, 1.45, 1.5, 1.5], thumb: 1.0 },
+        head: E(0.15, -0.28, 0), mood: 'concentre', poke
+      };
+    },
+    reflechir: t => ({
+      L: { p: V(-1.45, -0.7 + wobble(t, 3, 0.04), 0.3), r: E(0.1, 0.3, 0.3), curl: [0.6, 0.6, 0.6, 0.6], thumb: 0.5 },
+      R: { p: V(0.45, -1.02, 0.92), r: E(-0.3, -0.4, 0.5), curl: [0.2 + Math.max(0, Math.sin(t * 2.5)) * 0.25, 1.2, 1.3, 1.3], thumb: 0.6 },
+      head: E(-0.22 + Math.sin(t * 0.9) * 0.03, 0.28 + Math.sin(t * 0.6) * 0.05, 0.12), mood: 'pense'
+    }),
+    reussi: t => {
+      const hop = Math.abs(Math.sin(t * 5.5));
+      return {
+        L: { p: V(-1.3, 0.95 + hop * 0.2, 0.3), r: E(0, 0.2, 0.35 + Math.sin(t * 11) * 0.12), curl: [0, 0, 0, 0], thumb: 0 },
+        R: { p: V(1.3, 0.95 + Math.abs(Math.sin(t * 5.5 + 0.4)) * 0.2, 0.3), r: E(0, -0.2, -0.35 - Math.sin(t * 11 + 1) * 0.12), curl: [0, 0, 0, 0], thumb: 0 },
+        head: E(-0.15, Math.sin(t * 5.5) * 0.12, Math.sin(t * 2.75) * 0.06), mood: 'joie', bounce: hop * 0.14
+      };
+    },
+    erreur: t => {
+      const shake = Math.sin(t * 15) * Math.max(0, 1 - (t % 2.4) / 0.9);
+      return {
+        L: { p: V(-0.9, 0.2, 0.85), r: E(-0.4, 0.6, 0.6 + shake * 0.1), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+        R: { p: V(0.9, 0.2, 0.85), r: E(-0.4, -0.6, -0.6 - shake * 0.1), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+        head: E(0.08, shake * 0.22, 0), mood: 'erreur'
+      };
+    }
+  };
+
+  // ---------- Animation ----------
+  let current = 'repos', since = 0, auto = false;
+  const ORDER = ['repos', 'saluer', 'taper', 'cliquer', 'reflechir', 'reussi', 'erreur'];
+  const LABEL = { repos: 'repos', saluer: 'saluer', taper: 'taper au clavier', cliquer: 'cliquer', reflechir: 'réfléchir', reussi: 'réussi !', erreur: 'erreur' };
+  const pointer = new THREE.Vector2(0, 0);
+  let blink = 0, nextBlink = 2;
+  const lerp = (a, b, k) => a + (b - a) * k;
+  // Lissage indépendant du nombre d'images par seconde
+  const ease = (rate, dt) => 1 - Math.exp(-rate * dt);
+
+  // Ressort amorti : le mouvement accélère, ralentit et dépasse un tout petit peu, comme un vrai geste
+  class Spring {
+    constructor(v = 0, stiff = 90, damp = 15) { this.v = v; this.vel = 0; this.stiff = stiff; this.damp = damp; }
+    step(target, dt) {
+      const steps = Math.max(1, Math.ceil(dt / 0.008)), h = dt / steps;
+      for (let i = 0; i < steps; i++) { this.vel += ((target - this.v) * this.stiff - this.vel * this.damp) * h; this.v += this.vel * h; }
+      return this.v;
+    }
+  }
+  const springs3 = (stiff, damp) => [0, 0, 0].map(() => new Spring(0, stiff, damp));
+  for (const h of Object.values(hands)) {
+    h.sp = springs3(70, 14); h.sr = springs3(80, 15);
+    h.sc = [0, 1, 2, 3].map(() => new Spring(0, 260, 20)); h.st = new Spring(0, 160, 18);
+  }
+  const headSpring = springs3(55, 12), bounceSpring = new Spring(0, 120, 14), kbSpring = new Spring(0.001, 120, 16);
+
+  function setAnim(name, fromUser) {
+    current = name; since = 0;
+    document.getElementById('anim').textContent = LABEL[name];
+  }
+
+  function poseHand(h, target, dt) {
+    const P = [target.p.x, target.p.y, target.p.z], R = [target.r.x, target.r.y, target.r.z];
+    h.hand.position.set(h.sp[0].step(P[0], dt), h.sp[1].step(P[1], dt), h.sp[2].step(P[2], dt));
+    h.hand.rotation.set(h.sr[0].step(R[0], dt), h.sr[1].step(R[1], dt), h.sr[2].step(R[2], dt));
+    h.fingers.forEach((f, i) => {
+      const c = h.sc[i].step(target.curl[i], dt);
+      f.a.rotation.x = c; f.b.rotation.x = c * 1.2;
+    });
+    const tc = h.st.step(target.thumb, dt);
+    h.thumb.rotation.x = tc * 0.8; h.thumb.rotation.z = tc * 0.6 * h.side;
+  }
+
+  const clock = new THREE.Clock();
+  const tmp = new THREE.Vector3();
+  let t = 0;
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta()) * (reduced ? 0.4 : 1);
+    t += dt; since += dt;
+    if (auto && since > (current === 'repos' ? 3 : 3.8)) setAnim(ORDER[(ORDER.indexOf(current) + 1) % ORDER.length], false);
+    const P = POSES[current](t);
+    const k = ease(8, dt);
+
+    // Tête : flotte, regarde vers le pointeur en plus de la pose (avec un léger retard naturel)
+    agent.position.y = Math.sin(t * 1.6) * 0.05 + bounceSpring.step(P.bounce || 0, dt);
+    head.rotation.set(
+      headSpring[0].step(P.head.x - pointer.y * 0.15, dt),
+      headSpring[1].step(P.head.y + pointer.x * 0.3, dt),
+      headSpring[2].step(P.head.z, dt));
+    skull.scale.y = 0.98 + Math.sin(t * 1.6) * 0.006;
+    poseHand(hands.L, P.L, dt);
+    poseHand(hands.R, P.R, dt);
+
+    // Visage : clignements, regard et expression qui glissent en douceur
+    nextBlink -= dt;
+    if (nextBlink <= 0) { blink = 0.16; nextBlink = 2 + Math.random() * 3.5; if (Math.random() < 0.2) nextBlink = 0.25; }
+    blink = Math.max(0, blink - dt);
+    const blinkK = blink > 0 ? Math.max(0.05, Math.abs(blink / 0.08 - 1)) : 1;
+    const X = EXPR[P.mood] || EXPR.calme, fk = ease(9, dt);
+    for (const key of ['open', 'w', 'h', 'brow', 'browY', 'mouth', 'mopen', 'mw', 'blush']) face[key] = lerp(face[key], X[key], fk);
+    face.happy = lerp(face.happy, X.happy || 0, ease(14, dt));
+    face.wave = lerp(face.wave, X.wave || 0, ease(14, dt));
+    face.hue = face.hue.map((c, i) => lerp(c, X.hue[i], fk));
+    // Où il regarde : la souris, le clavier quand il tape, en haut quand il réfléchit
+    const lx = P.keyboard ? Math.sin(t * 1.3) * 0.3 : P.mood === 'pense' ? 0.6 : pointer.x * 1.2 + Math.sin(t * 0.37) * 0.15;
+    const ly = P.keyboard ? 0.9 : P.mood === 'pense' ? -0.9 : pointer.y * 0.9;
+    face.lookX = lerp(face.lookX, Math.max(-1, Math.min(1, lx)), ease(6, dt));
+    face.lookY = lerp(face.lookY, Math.max(-1, Math.min(1, ly)), ease(6, dt));
+    drawFace(t, blinkK);
+    M.accent.emissiveIntensity = 0.5 + (P.mood === 'pense' ? 0.9 + Math.sin(t * 8) * 0.6 : Math.sin(t * 2) * 0.2);
+    antenna.rotation.z = -head.rotation.z * 0.8 + Math.sin(t * 2.2) * 0.06 + (P.mood === 'erreur' ? Math.sin(t * 30) * 0.12 : 0);
+    antenna.rotation.x = -head.rotation.x * 0.5;
+
+    // Clavier : il apparaît en douceur ; une touche s'enfonce quand un bout de doigt la touche
+    keyboard.scale.setScalar(Math.max(0.001, kbSpring.step(P.keyboard || window.SKIN_KB ? 1 : 0.001, dt)));
+    if (keyboard.scale.x > 0.05) {
+      keyboard.updateMatrixWorld();
+      const tipsW = [];
+      for (const h of [hands.L, hands.R]) for (const f of h.fingers) { f.tip.getWorldPosition(tmp); tipsW.push(keyboard.worldToLocal(tmp.clone())); }
+      for (const kk of keys) {
+        const hit = tipsW.some(q => Math.abs(q.x - kk.position.x) < 0.11 && Math.abs(q.z - kk.position.z) < 0.13 && q.y < 0.2);
+        kk.position.y = lerp(kk.position.y, hit ? 0.035 : 0.065, ease(30, dt));
+      }
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  function resize() {
+    const w = mount.clientWidth, h = mount.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // Sur un écran étroit, la caméra recule pour garder la tête et les deux mains dans le cadre
+    if (window.SKIN && window.SKIN.setCamera) window.SKIN.setCamera(camera, w, h);
+    else { const dist = w / h < 0.8 ? 10.5 : 7.2; camera.position.set(0, 0.5, dist); camera.lookAt(0, -0.2, 0); }
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+  resize();
+  // Poses de départ sans saut
+  const P0 = POSES.repos(0);
+  for (const s of ['L', 'R']) {
+    const h = hands[s];
+    ['x', 'y', 'z'].forEach((a, i) => { h.sp[i].v = P0[s].p[a]; h.sr[i].v = P0[s].r[a]; });
+    P0[s].curl.forEach((c, i) => { h.sc[i].v = c; });
+  }
+  window.SKIN = { THREE, scene, camera, renderer, agent, head, hands, keyboard, POSES, setAnim, pointer, M, V, E, resize, time: () => t };
+  frame();
+})();
+
+</script>
+<script>
+(() => {
+  const S = window.SKIN, THREE = S.THREE;
+  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, Hand, Head, choices, headState, pick, runStatus } = window.AgentLinux;
+  const $ = id => document.getElementById(id);
+  const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
+
+  // ---------- Le poste de travail : bureau, écran, clavier, souris ----------
+  const station = new THREE.Group(); S.scene.add(station);
+  const deskMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7, metalness: 0.05 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x2b313d, roughness: 0.4, metalness: 0.6 });
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.12, 2.8), deskMat);
+  desk.position.set(0, -1.38, 0.9); desk.receiveShadow = true; desk.castShadow = true; station.add(desk);
+  for (const [x, z] of [[-3, -0.35], [3, -0.35], [-3, 2.15], [3, 2.15]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), metal); leg.position.set(x, -1.68, z); station.add(leg);
+  }
+
+  // L'agent se place à gauche, tourné vers l'écran
+  const agent = S.agent;
+  agent.position.set(-1.8, 0, -0.25);
+  agent.rotation.y = 0.55;
+  agent.add(S.keyboard);
+  S.keyboard.position.set(0, -1.27, 1.05); S.keyboard.rotation.x = 0.05;
+  window.SKIN_KB = true;
+
+  // Souris : elle glisse un peu quand le curseur bouge
+  const mouseObj = new THREE.Group();
+  const mBody = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 16), new THREE.MeshStandardMaterial({ color: 0x1d222c, roughness: 0.35, metalness: 0.3 }));
+  mBody.scale.set(0.75, 0.4, 1.05); mBody.castShadow = true; mouseObj.add(mBody);
+  const mStripe = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.12), S.M.accent); mStripe.position.set(0, 0.06, -0.06); mouseObj.add(mStripe);
+  const MOUSE_BASE = new THREE.Vector3(1.62, -1.26, 1.0);
+  mouseObj.position.copy(MOUSE_BASE); agent.add(mouseObj);
+  const mouseOff = new THREE.Vector3();
+
+  // Écran : un moniteur dont l'image est le bureau simulé de l'agent, dessiné en direct
+  const SW = 960, SH = 640;
+  const screenCanvas = document.createElement('canvas'); screenCanvas.width = SW; screenCanvas.height = SH;
+  const sg = screenCanvas.getContext('2d');
+  const screenTex = new THREE.CanvasTexture(screenCanvas);
+  screenTex.encoding = THREE.sRGBEncoding; screenTex.anisotropy = 8;
+  const monitor = new THREE.Group();
+  const bezel = new THREE.Mesh(new THREE.BoxGeometry(3.25, 2.25, 0.12), new THREE.MeshStandardMaterial({ color: 0x14171d, roughness: 0.45, metalness: 0.4 }));
+  bezel.castShadow = true; monitor.add(bezel);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.0), new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false }));
+  screen.position.z = 0.065; monitor.add(screen);
+  const glow = new THREE.PointLight(0x7aa7ff, 0.6, 5); glow.position.set(0, 0, 1.2); monitor.add(glow);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.12), metal); neck.position.set(0, -1.4, -0.12); monitor.add(neck);
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.06, 0.6), metal); foot.position.set(0, -1.76, 0); monitor.add(foot);
+  monitor.scale.setScalar(1.18);
+  monitor.position.set(1.3, 0.62, 0.5);
+  monitor.rotation.y = -0.6;
+  station.add(monitor);
+
+  // ---------- Pose « souris » : main droite sur la souris, main gauche posée sur le clavier ----------
+  let clickAt = -10;
+  S.POSES.souris = t => {
+    const since = t - clickAt, tap = since < 0.22 ? Math.sin((since / 0.22) * Math.PI) : 0;
+    return {
+      L: { p: S.V(-0.5, -0.92, 0.72), r: S.E(1.42, 0.12, 0.08), curl: [0.55, 0.5, 0.5, 0.55], thumb: 0.35 },
+      R: { p: S.V(MOUSE_BASE.x + mouseOff.x, -1.02 - tap * 0.03, MOUSE_BASE.z - 0.32 + mouseOff.z), r: S.E(1.38, -0.15, -0.05), curl: [0.25 + tap * 0.45, 0.45, 0.6, 0.7], thumb: 0.55 },
+      head: S.E(0.12, 0, 0), mood: 'concentre'
+    };
+  };
+  // Il regarde l'écran : tête et yeux tournés vers le moniteur
+  S.pointer.set(0.75, 0.15);
+
+  // ---------- Caméra ----------
+  S.setCamera = (camera, w, h) => {
+    const narrow = w / h < 0.9;
+    camera.position.set(narrow ? 0.4 : 0.4, narrow ? 1.6 : 1.1, narrow ? 13.5 : 8.8);
+    camera.lookAt(0.2, -0.05, 0.5);
+  };
+  S.resize();
+
+  // ---------- Dessin de l'écran (le bureau simulé, sur un canevas 960 × 640) ----------
+  const CW = SW / COLS, CH = SH / ROWS;
+  const cur = { x: 6.5 * CW, y: 3.5 * CH, ring: 0 };
+  const COLORS = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', code: '#252a3a', corbeille: '#4a505e' };
+  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k === '‹mot›' ? p.word : k) ?? k;
+  const shown = (line, p) => line.replace('‹texte›', JSON.stringify(p.text ?? ''));
+  function rr(x, y, w, h, r) { sg.beginPath(); sg.moveTo(x + r, y); sg.arcTo(x + w, y, x + w, y + h, r); sg.arcTo(x + w, y + h, x, y + h, r); sg.arcTo(x, y + h, x, y, r); sg.arcTo(x, y, x + w, y, r); sg.closePath(); }
+  function text(str, x, y, color, size = 14, font = 'Inter', weight = 400, align = 'left') {
+    sg.fillStyle = color; sg.font = `${weight} ${size}px ${font}, system-ui, sans-serif`; sg.textAlign = align; sg.textBaseline = 'middle';
+    sg.fillText(str, x, y);
+  }
+  function clipText(str, max) { return str.length > max ? str.slice(0, max - 1) + '…' : str; }
+  function icon(app, cx, cy, s) {
+    sg.save(); sg.translate(cx, cy);
+    sg.lineWidth = 3; sg.lineCap = 'round'; sg.lineJoin = 'round';
+    if (app === 'terminal') { sg.strokeStyle = '#63d68a'; sg.beginPath(); sg.moveTo(-s * 0.3, -s * 0.2); sg.lineTo(-s * 0.05, 0); sg.lineTo(-s * 0.3, s * 0.2); sg.moveTo(0.02 * s, s * 0.22); sg.lineTo(s * 0.3, s * 0.22); sg.stroke(); }
+    if (app === 'fichiers') { sg.fillStyle = '#fff'; rr(-s * 0.3, -s * 0.2, s * 0.6, s * 0.42, 4); sg.fill(); }
+    if (app === 'editeur') { sg.strokeStyle = '#3b6fd8'; for (let i = 0; i < 4; i++) { sg.beginPath(); sg.moveTo(-s * 0.25, -s * 0.2 + i * s * 0.13); sg.lineTo(s * (i === 3 ? 0.05 : 0.25), -s * 0.2 + i * s * 0.13); sg.stroke(); } }
+    if (app === 'code') { sg.strokeStyle = '#c792ea'; sg.beginPath(); sg.moveTo(-s * 0.12, -s * 0.2); sg.lineTo(-s * 0.3, 0); sg.lineTo(-s * 0.12, s * 0.2); sg.moveTo(s * 0.12, -s * 0.2); sg.lineTo(s * 0.3, 0); sg.lineTo(s * 0.12, s * 0.2); sg.stroke(); }
+    if (app === 'corbeille') { sg.strokeStyle = '#e6e9ef'; sg.beginPath(); sg.moveTo(-s * 0.25, -s * 0.15); sg.lineTo(s * 0.25, -s * 0.15); sg.moveTo(-s * 0.18, -s * 0.15); sg.lineTo(-s * 0.13, s * 0.25); sg.lineTo(s * 0.13, s * 0.25); sg.lineTo(s * 0.18, -s * 0.15); sg.stroke(); }
+    sg.restore();
+  }
+  const pill = (label, cx, cy, bg, fg = '#fff') => { sg.font = '600 13px Inter, system-ui'; const w = sg.measureText(label).width + 18; sg.fillStyle = bg; rr(cx - w / 2, cy - 13, w, 26, 8); sg.fill(); text(label, cx, cy, fg, 13, 'Inter', 600, 'center'); };
+
+  function drawScreen(e, p, overlay) {
+    const g = sg;
+    const bg = g.createLinearGradient(0, 0, SW, SH); bg.addColorStop(0, '#1a2140'); bg.addColorStop(0.6, '#0f1424'); bg.addColorStop(1, '#0a0d17');
+    g.fillStyle = bg; g.fillRect(0, 0, SW, SH);
+    g.fillStyle = 'rgba(255,181,71,0.10)'; g.beginPath(); g.arc(SW * 0.82, SH * 0.25, 160, 0, Math.PI * 2); g.fill();
+    // Barre du haut
+    g.fillStyle = 'rgba(5,6,9,0.9)'; g.fillRect(0, 0, SW, 26);
+    text('Activités', 12, 13, '#e6e9ef', 13, 'Inter', 600);
+    text($('clock').textContent, SW / 2, 13, '#e6e9ef', 13, 'Inter', 600, 'center');
+    text('FR   Wi-Fi   100 %', SW - 12, 13, '#8a93a6', 12, 'Inter', 400, 'right');
+    // Dock
+    g.fillStyle = 'rgba(20,23,31,0.85)'; rr(3 * CW + 4, 7 * CH + 6, 5 * CW - 8, CH - 12, 16); g.fill();
+    for (const [x, app] of Object.entries(DOCK)) {
+      const cx = (+x + 0.5) * CW, cy = 7.5 * CH;
+      g.fillStyle = COLORS[app]; rr(cx - 24, cy - 24, 48, 48, 11); g.fill();
+      icon(app, cx, cy, 48);
+      if (e.open.includes(app)) { g.fillStyle = '#ffb547'; g.beginPath(); g.arc(cx, cy + 32, 3, 0, Math.PI * 2); g.fill(); }
+      if (app === 'corbeille' && e.trash.length) { g.fillStyle = '#ff6b6b'; g.beginPath(); g.arc(cx + 20, cy - 20, 9, 0, Math.PI * 2); g.fill(); text(String(e.trash.length), cx + 20, cy - 20, '#fff', 11, 'Inter', 600, 'center'); }
+    }
+    // Fenêtres, de l'arrière vers l'avant
+    const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
+    for (const app of order) {
+      const L = LAYOUT[app], x = L.x0 * CW + 3, y = L.y0 * CH + 3, w = (L.x1 - L.x0 + 1) * CW - 6, h = (L.y1 - L.y0 + 1) * CH - 6;
+      g.save();
+      g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = 18; g.shadowOffsetY = 6;
+      g.fillStyle = '#1d2029'; rr(x, y, w, h, 12); g.fill();
+      g.restore();
+      g.save(); rr(x, y, w, h, 12); g.clip();
+      g.fillStyle = '#262a35'; g.fillRect(x, y, w, 30);
+      const title = { terminal: `agent@linux: ${e.cwd.replace(HOME, '~')}`, fichiers: 'Fichiers', editeur: `${e.ed.name || 'Sans titre'} — Éditeur`, code: 'Atelier de code', bac: `Bac à sable${e.ran ? ' — ' + e.ran.from : ''}` }[app];
+      text(clipText(title, 38), x + w / 2, y + 15, e.focus === app ? '#e6e9ef' : '#8a93a6', 13, 'Inter', 600, 'center');
+      const by = y + 30, bh = h - 30;
+      if (app === 'terminal') {
+        g.fillStyle = '#0d0f14'; g.fillRect(x, by, w, bh);
+        const lines = e.term.slice(-7);
+        const prompt = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' $ ' + e.buf.map(k => word(k, p)).join(' ').replace('./ ', './');
+        lines.forEach((l, i) => text(clipText(l.line, 56), x + 10, by + 14 + i * 19, l.err ? '#ff6b6b' : '#e6e9ef', 13, 'JetBrains Mono'));
+        text(clipText(prompt, 56) + (Math.floor(performance.now() / 500) % 2 ? '▌' : ''), x + 10, by + 14 + lines.length * 19, '#63d68a', 13, 'JetBrains Mono');
+      }
+      if (app === 'fichiers') {
+        text(e.fm.replace(HOME, '~'), x + 12, y + 15, '#8a93a6', 11, 'JetBrains Mono');
+        pill('↑ Parent', (L.up[0] + 0.5) * CW, (L.up[1] + 0.5) * CH, '#2f3542');
+        pill('Corbeille', (L.bin[0] + 0.5) * CW, (L.bin[1] + 0.5) * CH, '#a53c3c');
+        e.list(e.fm).slice(0, L.items.length).forEach((name, k) => {
+          const [ix, iy] = L.items[k], cx = (ix + 0.5) * CW, cy = (iy + 0.5) * CH - 8, f = e.fs.get(e.fm + '/' + name);
+          if (e.sel === name) { g.fillStyle = 'rgba(59,111,216,0.45)'; rr(cx - 36, cy - 30, 72, 66, 8); g.fill(); }
+          if (f.d) { g.fillStyle = '#f5c95c'; rr(cx - 20, cy - 16, 40, 30, 4); g.fill(); g.fillStyle = '#e8b84a'; rr(cx - 20, cy - 20, 18, 8, 3); g.fill(); }
+          else { g.fillStyle = f.prog ? '#c792ea' : name.endsWith('.png') ? '#7aa7ff' : '#dfe4ee'; rr(cx - 14, cy - 19, 28, 36, 4); g.fill(); }
+          text(clipText(name, 11), cx, cy + 28, '#e6e9ef', 11, 'Inter', 400, 'center');
+        });
+      }
+      if (app === 'editeur') {
+        g.fillStyle = '#fbfaf6'; g.fillRect(x, by, w, bh - CH + 3);
+        text(clipText(e.ed.text, 44), x + 12, by + 18, '#23262d', 14, 'JetBrains Mono');
+        g.fillStyle = '#ece9e1'; g.fillRect(x, L.y1 * CH, w, CH);
+        text(e.ed.saving ? 'Enregistrer sous : ' + (e.ed.nameBuf || '') : e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré', x + 12, (L.y1 + 0.5) * CH, '#444', 13);
+        pill('Enregistrer', (L.save[0] + 0.5) * CW, (L.save[1] + 0.5) * CH, '#3b6fd8');
+      }
+      if (app === 'code') {
+        g.fillStyle = '#11141b'; g.fillRect(x, by, w, bh);
+        if (!e.code.length) text('Programme vide', x + 14, by + 20, '#8a93a6', 13);
+        e.code.forEach((l, i) => {
+          text(String(i + 1), x + 24, by + 18 + i * 22, '#4b5366', 13, 'JetBrains Mono', 400, 'right');
+          text(clipText(shown(l, p), 52), x + 36, by + 18 + i * 22, /^(import|for)/.test(l.trim()) ? '#c792ea' : '#e6e9ef', 13, 'JetBrains Mono');
+        });
+        const st = !e.run ? 'Pas encore exécuté' : e.run.error ? e.run.error : e.run.win && !e.run.win.shown ? 'La fenêtre s’est fermée tout de suite' : e.run.win ? 'Fenêtre ouverte dans le bac à sable' : 'Sortie : ' + (e.run.out.join(' ') || '(rien)');
+        g.fillStyle = '#181c25'; g.fillRect(x, y + h - 26, w, 26);
+        text(clipText(st, 60), x + 12, y + h - 13, e.run?.error ? '#ff6b6b' : e.run ? '#63d68a' : '#8a93a6', 12, 'JetBrains Mono');
+        pill('Nouveau', (L.neu[0] + 0.5) * CW, (L.neu[1] + 0.5) * CH + 8, '#2f3542');
+        pill('.exe', (L.build[0] + 0.5) * CW, (L.build[1] + 0.5) * CH + 8, '#2f3542');
+        pill('▶ Lancer', (L.run[0] + 0.5) * CW, (L.run[1] + 0.5) * CH + 8, '#3b6fd8');
+      }
+      if (app === 'bac') {
+        g.fillStyle = '#0f1218'; g.fillRect(x, by, w, bh);
+        const r = e.ran;
+        if (!r) text('En attente d’un programme', x + 12, by + 18, '#8a93a6', 12);
+        else if (r.error) text(clipText(r.error, 44), x + 12, by + 18, '#ff6b6b', 12, 'JetBrains Mono');
+        else if (r.win && r.win.shown) {
+          g.fillStyle = '#ececec'; rr(x + 14, by + 8, w * 0.62, bh - 16, 6); g.fill();
+          g.fillStyle = '#d6d6d6'; g.fillRect(x + 14, by + 8, w * 0.62, 16);
+          text('tk', x + 22, by + 16, '#333', 10);
+          const items = [...r.win.labels.map(l => ['l', l]), ...Array(r.win.buttons).fill(['b', 'Quitter'])];
+          items.slice(0, 2).forEach(([k, l], i) => {
+            const cy = by + 40 + i * 24, cx = x + 14 + w * 0.31;
+            if (k === 'b') { g.fillStyle = '#fff'; rr(cx - 34, cy - 10, 68, 20, 4); g.fill(); g.strokeStyle = '#999'; g.lineWidth = 1; g.stroke(); }
+            text(clipText(l, 20), cx, cy, '#222', 13, 'Inter', 500, 'center');
+          });
+        } else text(clipText(r.out.join('  ') || '(rien)', 40), x + 12, by + 18, '#e6e9ef', 13, 'JetBrains Mono');
+      }
+      g.restore();
+      // Bouton fermer
+      g.fillStyle = '#3a3f4c'; g.beginPath(); g.arc((L.close[0] + 0.5) * CW, y + 15, 9, 0, Math.PI * 2); g.fill();
+      text('✕', (L.close[0] + 0.5) * CW, y + 15, '#e6e9ef', 11, 'Inter', 600, 'center');
+      if (e.focus === app) { g.strokeStyle = 'rgba(255,181,71,0.6)'; g.lineWidth = 2; rr(x, y, w, h, 12); g.stroke(); }
+    }
+    // Curseur : il glisse vers sa case
+    const tx = (e.cx + 0.5) * CW, ty = (e.cy + 0.5) * CH;
+    cur.x += (tx - cur.x) * 0.35; cur.y += (ty - cur.y) * 0.35;
+    if (cur.ring > 0) { g.strokeStyle = `rgba(255,181,71,${cur.ring})`; g.lineWidth = 3; g.beginPath(); g.arc(cur.x, cur.y, 26 - cur.ring * 14, 0, Math.PI * 2); g.stroke(); cur.ring = Math.max(0, cur.ring - 0.06); }
+    g.save(); g.translate(cur.x - 3, cur.y - 3); g.scale(1.6, 1.6);
+    g.fillStyle = '#fff'; g.strokeStyle = '#111'; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(2, 1); g.lineTo(2, 19); g.lineTo(7, 14.5); g.lineTo(10.5, 22); g.lineTo(13.8, 20.5); g.lineTo(10.3, 13); g.lineTo(17.5, 13); g.closePath(); g.fill(); g.stroke();
+    g.restore();
+    if (overlay) {
+      g.fillStyle = 'rgba(5,7,10,0.72)'; g.fillRect(0, 0, SW, SH);
+      text(overlay.title, SW / 2, SH / 2 - 30, '#e6e9ef', 30, 'Inter', 600, 'center');
+      g.fillStyle = '#242b38'; rr(SW / 2 - 220, SH / 2 + 4, 440, 14, 7); g.fill();
+      g.fillStyle = '#ffb547'; rr(SW / 2 - 220, SH / 2 + 4, 440 * overlay.p, 14, 7); g.fill();
+      text(overlay.sub, SW / 2, SH / 2 + 46, '#8a93a6', 16, 'Inter', 400, 'center');
+    }
+    screenTex.needsUpdate = true;
+  }
+
+  // ---------- L'agent et son cerveau ----------
+  const hand = new Hand(), head = new Head();
+  let env = new Env().reset(false);
+  env.open = ['terminal', 'fichiers']; env.focus = 'terminal';
+  env.term.push({ line: 'Bienvenue sur le bureau de l’agent.' });
+  let curP = {}, overlay = { title: 'L’agent s’entraîne', sub: '', p: 0 };
+  const clockEl = document.createElement('span'); clockEl.id = 'clock'; clockEl.textContent = '09:00'; clockEl.hidden = true; document.body.append(clockEl);
+
+  // Boucle d'affichage de l'écran (chaque image)
+  (function screenLoop() { drawScreen(env, curP, overlay); requestAnimationFrame(screenLoop); })();
+
+  let speed = 1, paused = false;
+  const sleep = async ms => { let left = ms; while (left > 0) { await new Promise(r => setTimeout(r, 40)); if (!paused) left -= 40 * speed; } };
+  function bubble(text, ms = 2600) {
+    const b = $('bubble'); b.textContent = text; b.classList.add('show');
+    clearTimeout(bubble.t); bubble.t = setTimeout(() => b.classList.remove('show'), ms / speed);
+  }
+  const anim = name => { S.setAnim(name); };
+
+  // La main amène le curseur case par case ; la vraie main 3D bouge la souris en même temps
+  async function reach(c, p) {
+    anim('souris');
+    for (let k = 0; k < 30; k++) {
+      const m = hand.pick(env, c, 0.02);
+      if (m === 4) {
+        const useful = env.step(4, p);
+        clickAt = S.time(); cur.ring = 1;
+        await sleep(260);
+        return useful;
+      }
+      env.step(m, p);
+      mouseOff.set((env.cx - 5.5) * 0.035, 0, (env.cy - 3.5) * 0.035);
+      mouseObj.position.set(MOUSE_BASE.x + mouseOff.x, MOUSE_BASE.y, MOUSE_BASE.z + mouseOff.z);
+      await sleep(130);
+    }
+    return false;
+  }
+
+  async function perform(task, p) {
+    const log = [];
+    for (let n = 0; n < 25; n++) {
+      const s = headState(env, task, p), C = choices(env, p), c = head.choose(s, C, 0.03, false);
+      let useful;
+      if (c.kind === 'touche') {
+        anim('taper');
+        useful = env.step(ACTIONS.indexOf('touche ' + c.d), p);
+        log.push((useful ? '' : '✗ ') + (c.d.startsWith('‹') ? word(c.d, p) : shown(c.d, p)));
+        await sleep(420);
+      } else {
+        useful = await reach(c, p);
+        log.push((useful ? '' : '✗ ') + 'clic ' + c.d);
+      }
+      const ok = !!task.done(env, p);
+      head.learn(s, c, ok ? 1 : (useful ? -0.02 : -0.06) + 0.95 * head.maxq(headState(env, task, p), choices(env, p), false));
+      if (ok) return { ok: true, log, n: n + 1 };
+    }
+    return { ok: false, log, n: 25 };
+  }
+
+  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'robots'];
+  const FILES = ['memo.txt', 'plan.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  const APPS = ['robot.exe', 'bonjour.exe', 'outil.exe', 'jeu.exe'];
+  const SAY = ['Bonjour le monde', 'Je sais coder !', 'Salut, humain', 'Vive Linux'];
+  function chooseGoal(e, mem) {
+    const home = e.list(HOME);
+    const isFile = n => !e.isDir(HOME + '/' + n);
+    const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
+    const newDir = DIRS.filter(d => !home.includes(d));
+    const newFile = FILES.filter(f => !home.includes(f));
+    const myDirs = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
+    const exes = home.filter(n => n.endsWith('.exe') && !mem.launched.has(n));
+    const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
+    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je lis ${f}.` }); }
+    const readable = home.filter(n => n.endsWith('.txt') && e.fs.get(HOME + '/' + n).c);
+    if (readable.length) { const f = pick(readable), w = pick(e.fs.get(HOME + '/' + f).c.split(/[^\p{L}]+/u).filter(x => x.length > 3)); if (w) c.push({ t: 'grep', p: { file: f, word: w }, why: `Je cherche « ${w} » dans ${f}.` }); }
+    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je crée un dossier « ${d} ».` }); }
+    if (myDirs.length && newFile.length) { const d = pick(myDirs), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans ${d}.` }); }
+    if (newFile.length) { const f = pick(newFile); c.push({ t: 'echo', p: { file: f, text: pick(['coder', 'apprendre', 'dormir']) }, why: `J’écris une note dans ${f}.` }); }
+    const loose = home.filter(n => isFile(n) && (n.endsWith('.png') || n.endsWith('.txt')));
+    if (loose.length && myDirs.length) { const f = pick(loose), d = pick(myDirs); c.push({ t: pick(['cp', 'mv']), p: { file: f, dir: d }, why: `Je range ${f} dans ${d}.` }); }
+    if (home.includes('hello.py') && !mem.launched.has('hello.py')) c.push({ t: 'py', p: { file: 'hello.py' }, why: 'Je lance le script hello.py.' });
+    c.push({ t: 'c-print', p: { text: pick(SAY) }, why: 'J’écris un programme qui affiche une phrase.' });
+    c.push({ t: 'c-count', p: {}, why: 'J’écris une boucle qui compte jusqu’à 5.' });
+    c.push({ t: 'c-tk', p: { text: pick(SAY) }, why: 'Je fabrique une fenêtre avec tkinter.' });
+    c.push({ t: 'c-btn', p: {}, why: 'Je fais une fenêtre avec un bouton.' });
+    const newApp = APPS.filter(a => !home.includes(a));
+    if (newApp.length) { const a = pick(newApp); c.push({ t: 'c-exe', p: { file: a, text: pick(SAY) }, why: `Je construis mon application ${a}.` }); }
+    if (exes.length) { const x = pick(exes); c.push({ t: 'exe', p: { file: x }, why: `Je lance ${x}.` }); }
+    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6 + (g.t === 'exe' ? 0.5 : 0);
+    return c.sort((a, b) => b.score - a.score)[0];
+  }
+
+  async function train() {
+    $('phase').textContent = 'entraînement';
+    anim('reflechir');
+    hand.train(4000);
+    const total = 240000, chunk = 2000;
+    for (let done = 0; done < total; done += chunk) {
+      head.train(chunk);
+      overlay.p = (done + chunk) / total;
+      overlay.sub = `${Math.round(overlay.p * 100)} % · ${(done + chunk).toLocaleString('fr-FR')} essais`;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    overlay = null;
+  }
+
+  async function live() {
+    bubble('Je m’entraîne d’abord sur des milliers d’essais…', 4000);
+    await train();
+    anim('reussi'); bubble('Prêt ! Je me mets au travail.'); await sleep(1600);
+    const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
+    let wins = 0, total = 0, minute = 9 * 60;
+    for (;;) {
+      const g = chooseGoal(env, mem);
+      curP = g.p;
+      minute += 3;
+      $('clock').textContent = `${String(minute / 60 % 24 | 0).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
+      $('phase').textContent = g.why;
+      anim('reflechir'); bubble(g.why); await sleep(1100);
+      env.run = null; env.ran = null;
+      const r = await perform(T[g.t], g.p);
+      total++; mem.count[g.t] = (mem.count[g.t] || 0) + 1;
+      if (r.ok) {
+        wins++;
+        if (g.t === 'cat') mem.read.add(g.p.file);
+        if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
+        if (g.t === 'exe' || g.t === 'py') mem.launched.add(g.p.file);
+      }
+      const li = document.createElement('li'); li.className = r.ok ? 'ok' : 'ko';
+      li.textContent = `${$('clock').textContent} ${g.why} ${r.ok ? `Réussi en ${r.n} décision${r.n > 1 ? 's' : ''}.` : 'Raté.'}`;
+      $('journal').append(li); $('journal').scrollTop = $('journal').scrollHeight;
+      $('score').textContent = `${wins} / ${total}`;
+      anim(r.ok ? 'reussi' : 'erreur');
+      bubble(r.ok ? pick(['Réussi !', 'Et voilà !', 'Parfait.', 'Trop facile.']) : pick(['Oups…', 'Raté, je réessaierai.', 'Hmm, pas cette fois.']), 1800);
+      await sleep(1700);
+      anim('repos'); await sleep(500);
+      if (env.term.length > 40) env.term = env.term.slice(-20);
+    }
+  }
+
+  $('pause').addEventListener('click', ev => { paused = !paused; ev.currentTarget.setAttribute('aria-pressed', String(paused)); ev.currentTarget.textContent = paused ? 'Reprendre' : 'Pause'; });
+  document.querySelectorAll('[data-sp]').forEach(b => b.addEventListener('click', () => {
+    speed = +b.dataset.sp;
+    document.querySelectorAll('[data-sp]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  window.__station = { get env() { return env; } };
+  live();
+})();
+</script>
