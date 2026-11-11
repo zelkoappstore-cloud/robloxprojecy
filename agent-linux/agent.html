@@ -1,0 +1,562 @@
+<title>Petit agent Linux</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Rubik:wght@400;500;600&display=swap">
+<style>
+/* Ambiance unique et sombre : à gauche le bureau Linux simulé où l'agent agit, à droite le carnet d'entraînement et le journal */
+:root {
+  --bg: #0c0f14;
+  --panel: #131821;
+  --line: #273041;
+  --text: #dfe5ee;
+  --dim: #7f8a9c;
+  --accent: #ffb547;
+  --ok: #6fdc8c;
+  --bad: #ff6b6b;
+  --term: #0a0d10;
+  --ui: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); font-size: 14px; }
+#app {
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; min-height: 100%;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+@media (max-width: 900px) { #app { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- Bureau --- */
+#desk {
+  position: relative; min-width: 0; aspect-ratio: 16 / 10.5; max-height: calc(100vh - 32px); border-radius: 12px; overflow: hidden;
+  background: radial-gradient(120% 90% at 20% 10%, #24335a 0%, #151c33 45%, #0d1120 100%);
+  border: 1px solid var(--line); user-select: none;
+}
+.topbar { position: absolute; inset: 0 0 auto; height: 26px; background: rgba(8, 10, 14, 0.75); display: flex; justify-content: space-between; align-items: center; padding: 0 12px; font-size: 12px; color: var(--dim); }
+.topbar b { color: var(--text); font-weight: 500; }
+.dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 10px; padding: 8px 12px; background: rgba(8, 10, 14, 0.7); border: 1px solid var(--line); border-radius: 14px; }
+.app-icon { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; font-family: var(--mono); font-weight: 600; font-size: 13px; position: relative; }
+.app-icon[data-app="terminal"] { background: #1b2027; color: var(--ok); }
+.app-icon[data-app="fichiers"] { background: #2d5ea8; color: #fff; }
+.app-icon[data-app="editeur"] { background: #e8e2d0; color: #2b2b2b; }
+.app-icon[data-app="corbeille"] { background: #3a3f4a; color: #cfd5df; }
+.app-icon.on::after { content: ""; position: absolute; bottom: -6px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.app-icon small { position: absolute; top: -6px; right: -6px; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; padding: 0 5px; font-family: var(--ui); }
+
+.win { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.win.focus { border-color: var(--accent); z-index: 3; }
+.win header { height: 26px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; background: #1a2130; font-size: 12px; color: var(--dim); }
+.win.focus header { color: var(--text); }
+.close { width: 14px; height: 14px; border-radius: 50%; background: var(--bad); }
+#w-terminal { left: 3%; top: 10%; width: 52%; height: 50%; }
+#w-fichiers { right: 3%; top: 10%; width: 38%; height: 46%; }
+#w-editeur { left: 24%; top: 50%; width: 50%; height: 32%; }
+.termbody { flex: 1; background: var(--term); font-family: var(--mono); font-size: 12px; line-height: 1.5; padding: 6px 10px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; white-space: pre-wrap; word-break: break-word; }
+.termbody .err { color: var(--bad); }
+.prompt { color: var(--ok); }
+.prompt i { font-style: normal; color: var(--text); }
+.caret { display: inline-block; width: 7px; height: 13px; background: var(--text); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.fmpath { font-family: var(--mono); font-size: 11px; color: var(--dim); padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.fmlist { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; padding: 10px; align-content: start; overflow: hidden; }
+.item { display: grid; justify-items: center; gap: 4px; font-size: 11px; text-align: center; word-break: break-all; }
+.item .ic { width: 30px; height: 24px; border-radius: 4px; background: #e2b84e; }
+.item.file .ic { width: 22px; height: 28px; background: #d9dee8; border-radius: 3px; }
+.edbody { flex: 1; background: #f4f0e6; color: #222; font-family: var(--mono); font-size: 13px; padding: 8px 10px; }
+.edbar { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: #e4ddcb; color: #333; font-size: 11px; }
+.savebtn { background: #2d5ea8; color: #fff; border-radius: 6px; padding: 3px 10px; }
+
+#cursor { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; z-index: 10; pointer-events: none; transition: left 0.45s cubic-bezier(.3,.7,.3,1), top 0.45s cubic-bezier(.3,.7,.3,1); }
+#cursor svg { display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+#cursor .ring { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; }
+#cursor.click .ring { animation: ring 0.35s ease-out; }
+@keyframes ring { from { opacity: 1; transform: scale(0.4); } to { opacity: 0; transform: scale(1.6); } }
+#bubble { position: absolute; z-index: 11; max-width: 46%; background: var(--accent); color: #1a1406; font-size: 12px; font-weight: 500; padding: 5px 10px; border-radius: 10px; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+#bubble.show { opacity: 1; }
+
+/* --- Panneau --- */
+#side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+h1 { margin: 0; font-size: 20px; font-weight: 600; text-wrap: balance; }
+h1 span { color: var(--accent); }
+h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+h2 em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--accent); }
+p.note { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.5; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button, select { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--dim); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.primary { background: var(--accent); border-color: var(--accent); color: #1a1406; font-weight: 600; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.bar { height: 6px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.skills { display: grid; gap: 6px; }
+.skill { display: grid; grid-template-columns: minmax(0, 1fr) 70px 56px; gap: 8px; align-items: center; font-size: 12px; }
+.skill b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill span { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.skill .bar i { background: var(--ok); }
+#level { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+#journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 340px; overflow-y: auto; font-size: 12px; line-height: 1.45; }
+#journal:empty::before { content: "Le journal se remplira quand tu lâcheras l’agent tout seul."; color: var(--dim); }
+#journal li { border-left: 3px solid var(--line); padding-left: 8px; }
+#journal li.ok { border-color: var(--ok); }
+#journal li.ko { border-color: var(--bad); }
+#journal li.sum { border-color: var(--accent); color: var(--accent); }
+#journal code { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { #cursor { transition: none; } .caret { animation: none; } }
+</style>
+
+<div id="app">
+  <div id="desk" aria-label="Bureau Linux simulé">
+    <div class="topbar"><b>agent@linux</b><span id="clock">09:00</span></div>
+    <div class="win" id="w-terminal" hidden><header>Terminal <i class="close" data-close="terminal"></i></header><div class="termbody" id="termbody"></div></div>
+    <div class="win" id="w-fichiers" hidden><header>Fichiers <i class="close" data-close="fichiers"></i></header><div class="fmpath" id="fmpath"></div><div class="fmlist" id="fmlist"></div></div>
+    <div class="win" id="w-editeur" hidden><header>Éditeur de texte <i class="close" data-close="editeur"></i></header><div class="edbody" id="edbody"></div><div class="edbar"><span id="edname">sans titre</span><span class="savebtn" id="savebtn">Enregistrer</span></div></div>
+    <div class="dock">
+      <div class="app-icon" data-app="terminal" title="Terminal">&gt;_</div>
+      <div class="app-icon" data-app="fichiers" title="Fichiers">Fi</div>
+      <div class="app-icon" data-app="editeur" title="Éditeur">Ab</div>
+      <div class="app-icon" data-app="corbeille" title="Corbeille">Co<small id="trashn" hidden>0</small></div>
+    </div>
+    <div id="cursor"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M2 1 L2 18 L7 13.5 L10.5 20.5 L13.5 19 L10 12 L17 12 Z" fill="#ffb547" stroke="#1a1406" stroke-width="1.4" stroke-linejoin="round"/></svg><div class="ring"></div></div>
+    <div id="bubble"></div>
+  </div>
+
+  <div id="side">
+    <div class="card">
+      <h1>Petit agent <span>Linux</span></h1>
+      <p class="note">Un minuscule agent qui apprend par essais et erreurs (apprentissage par renforcement) à se servir d’un bureau Linux simulé : terminal, gestionnaire de fichiers, éditeur, corbeille.</p>
+    </div>
+
+    <div class="card">
+      <h2>1. Entraînement <em id="level">débutant</em></h2>
+      <div class="row">
+        <button class="primary" id="train">Entraîner 1 400 essais</button>
+        <button id="forget">Tout oublier</button>
+      </div>
+      <div class="bar" id="progress"><i></i></div>
+      <div class="skills" id="skills"></div>
+      <p class="note">Récompense +1 quand l’objectif est atteint, petite pénalité à chaque action et quand il clique au mauvais endroit. Le bureau de départ change à chaque essai.</p>
+    </div>
+
+    <div class="card">
+      <h2>2. Regarder un essai</h2>
+      <div class="row">
+        <select id="taskSel" aria-label="Objectif à montrer"></select>
+        <button id="show">Montrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Le lâcher tout seul</h2>
+      <div class="row">
+        <button class="primary" id="free">Lâcher l’agent</button>
+        <button data-sp="1" aria-pressed="true">×1</button>
+        <button data-sp="3" aria-pressed="false">×3</button>
+        <button data-sp="10" aria-pressed="false">×10</button>
+      </div>
+      <p class="note">Sans aucun objectif donné. Il choisit lui-même quoi faire (sa curiosité préfère ce qu’il n’a pas encore fait) et utilise ce qu’il a appris.</p>
+      <ol id="journal"></ol>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const HOME = '/home/agent';
+  const ACTIONS = ['OPEN_TERM', 'OPEN_FILES', 'OPEN_EDIT', 'CLOSE', 'LS', 'PWD', 'MKDIR', 'CD', 'CDUP', 'TOUCH', 'CAT', 'RM', 'TYPE', 'SAVE', 'FM_TRASH', 'FM_UP'];
+  const rnd = n => Math.random() * n | 0;
+  const pick = a => a[rnd(a.length)];
+
+  // ---------- Environnement : un petit Linux en mémoire ----------
+  class Env {
+    reset(random = false) {
+      this.fs = new Map([
+        [HOME, { d: 1 }], [HOME + '/Documents', { d: 1 }], [HOME + '/Images', { d: 1 }],
+        [HOME + '/notes.txt', { c: 'liste de courses : pain, pommes, café' }],
+        [HOME + '/photo.png', { c: '(image)' }],
+        [HOME + '/Documents/recette.txt', { c: 'crêpes : farine, œufs, lait' }]
+      ]);
+      this.cwd = HOME; this.fm = HOME; this.open = []; this.focus = null;
+      this.ed = { text: '', name: null }; this.term = []; this.lastCmd = null; this.read = null; this.trash = [];
+      if (random) {
+        if (Math.random() < 0.3) this.fs.set(HOME + '/projets', { d: 1 });
+        for (const app of ['terminal', 'fichiers', 'editeur']) if (Math.random() < 0.35) this.open.push(app);
+        this.focus = this.open.length ? pick(this.open) : null;
+        if (Math.random() < 0.3) this.cwd = HOME + '/Documents';
+        if (Math.random() < 0.3) this.fm = HOME + '/Images';
+        if (this.open.includes('editeur') && Math.random() < 0.5) this.ed.text = 'brouillon';
+      }
+      return this;
+    }
+    isDir(p) { return this.fs.get(p)?.d === 1; }
+    list(dir) {
+      const pre = dir + '/';
+      return [...this.fs.keys()].filter(k => k.startsWith(pre) && !k.slice(pre.length).includes('/')).map(k => k.slice(pre.length)).sort();
+    }
+    say(line, err) { this.term.push({ line, err }); if (this.term.length > 40) this.term.shift(); }
+    focusApp(app) { if (!this.open.includes(app)) this.open.push(app); this.focus = app; }
+    // Exécute une action ; renvoie false si elle n'a aucun sens dans la situation (mauvaise fenêtre…)
+    step(a, p) {
+      const inTerm = this.focus === 'terminal';
+      const cmd = (txt, fn) => { if (!inTerm) return false; this.say('$ ' + txt); fn(); return true; };
+      switch (a) {
+        case 'OPEN_TERM': this.focusApp('terminal'); return true;
+        case 'OPEN_FILES': this.focusApp('fichiers'); return true;
+        case 'OPEN_EDIT': if (!this.open.includes('editeur')) this.ed = { text: '', name: null }; this.focusApp('editeur'); return true;
+        case 'CLOSE':
+          if (!this.focus) return false;
+          this.open = this.open.filter(x => x !== this.focus);
+          this.focus = this.open[this.open.length - 1] || null;
+          return true;
+        case 'LS': return cmd('ls', () => { this.say(this.list(this.cwd).join('  ') || '(vide)'); this.lastCmd = 'ls:' + this.cwd; });
+        case 'PWD': return cmd('pwd', () => this.say(this.cwd));
+        case 'MKDIR': if (!p.dir) return false; return cmd('mkdir ' + p.dir, () => {
+          const path = this.cwd + '/' + p.dir;
+          if (this.fs.has(path)) this.say(`mkdir: « ${p.dir} » existe déjà`, 1); else this.fs.set(path, { d: 1 });
+        });
+        case 'CD': if (!p.dir) return false; return cmd('cd ' + p.dir, () => {
+          const path = this.cwd + '/' + p.dir;
+          if (this.isDir(path)) this.cwd = path; else this.say(`cd: ${p.dir}: aucun dossier de ce nom`, 1);
+        });
+        case 'CDUP': return cmd('cd ..', () => { if (this.cwd !== HOME) this.cwd = this.cwd.slice(0, this.cwd.lastIndexOf('/')); });
+        case 'TOUCH': if (!p.file) return false; return cmd('touch ' + p.file, () => { const path = this.cwd + '/' + p.file; if (!this.fs.has(path)) this.fs.set(path, { c: '' }); });
+        case 'CAT': if (!p.file) return false; return cmd('cat ' + p.file, () => {
+          const f = this.fs.get(this.cwd + '/' + p.file);
+          if (f && !f.d) { this.say(f.c || '(fichier vide)'); this.read = this.cwd + '/' + p.file; } else this.say(`cat: ${p.file}: introuvable`, 1);
+        });
+        case 'RM': if (!p.file) return false; return cmd('rm ' + p.file, () => {
+          const path = this.cwd + '/' + p.file;
+          if (this.fs.has(path) && !this.isDir(path)) this.fs.delete(path); else this.say(`rm: ${p.file}: introuvable`, 1);
+        });
+        case 'TYPE': if (this.focus !== 'editeur' || !p.text) return false; this.ed.text = p.text; return true;
+        case 'SAVE':
+          if (this.focus !== 'editeur' || !this.ed.text || !p.file) return false;
+          this.fs.set(HOME + '/' + p.file, { c: this.ed.text }); this.ed.name = p.file; return true;
+        case 'FM_TRASH': {
+          if (this.focus !== 'fichiers' || !p.file) return false;
+          const path = this.fm + '/' + p.file;
+          if (!this.fs.has(path) || this.isDir(path)) return false;
+          this.trash.push({ name: p.file, c: this.fs.get(path).c }); this.fs.delete(path); return true;
+        }
+        case 'FM_UP': if (this.focus !== 'fichiers' || this.fm === HOME) return false; this.fm = this.fm.slice(0, this.fm.lastIndexOf('/')); return true;
+      }
+      return false;
+    }
+  }
+
+  // ---------- Objectifs d'entraînement ----------
+  const TASKS = [
+    { id: 'term', label: 'Ouvrir le terminal', p: {}, done: (e) => e.focus === 'terminal' },
+    { id: 'ls', label: 'Lister le dossier personnel', p: {}, done: (e) => e.lastCmd === 'ls:' + HOME },
+    { id: 'mkdir', label: 'Créer un dossier', p: { dir: 'projets' }, done: (e, p) => e.isDir(HOME + '/' + p.dir) },
+    { id: 'touch', label: 'Créer un fichier dans un dossier', p: { dir: 'projets', file: 'idee.txt' }, done: (e, p) => e.fs.has(`${HOME}/${p.dir}/${p.file}`) },
+    { id: 'cat', label: 'Lire un fichier texte', p: { file: 'notes.txt' }, done: (e, p) => e.read === HOME + '/' + p.file },
+    { id: 'write', label: 'Écrire et enregistrer un texte', p: { file: 'lettre.txt', text: 'bonjour' }, done: (e, p) => e.fs.get(HOME + '/' + p.file)?.c === p.text },
+    { id: 'trash', label: 'Mettre un fichier à la corbeille', p: { file: 'photo.png' }, done: (e, p) => !e.fs.has(HOME + '/' + p.file) }
+  ];
+  const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
+
+  // Ce que l'agent « voit » : un petit résumé de la situation, pas les pixels
+  function observe(e, task, p) {
+    const f = [
+      task.id, e.focus || 'n',
+      +e.open.includes('terminal'), +e.open.includes('fichiers'), +e.open.includes('editeur'),
+      +(e.cwd === HOME),
+      p.dir ? +e.isDir(HOME + '/' + p.dir) : 2,
+      p.dir ? +(e.cwd === HOME + '/' + p.dir) : 2,
+      p.file ? +e.fs.has(e.cwd + '/' + p.file) : 2,
+      p.file ? +e.fs.has(e.fm + '/' + p.file) : 2,
+      p.text ? +(e.ed.text === p.text) : 2
+    ];
+    return f.join('');
+  }
+
+  // ---------- Cerveau : Q-learning ----------
+  let Qt = new Map();
+  const stats = Object.fromEntries(TASKS.map(t => [t.id, { tries: 0, wins: [], steps: [] }]));
+  let trained = 0;
+  const qrow = s => { let r = Qt.get(s); if (!r) { r = new Float32Array(ACTIONS.length); Qt.set(s, r); } return r; };
+  const argmax = r => { let b = 0; for (let i = 1; i < r.length; i++) if (r[i] > r[b] || (r[i] === r[b] && Math.random() < 0.3)) b = i; return b; };
+  const MAX_STEPS = 25, ALPHA = 0.3, GAMMA = 0.95;
+
+  function episode(task, eps) {
+    const e = new Env().reset(true), p = task.p;
+    let s = observe(e, task, p), n = 0, ok = false;
+    while (n < MAX_STEPS) {
+      const row = qrow(s);
+      const a = Math.random() < eps ? rnd(ACTIONS.length) : argmax(row);
+      const valid = e.step(ACTIONS[a], p);
+      n++;
+      ok = task.done(e, p);
+      const r = ok ? 1 : valid ? -0.02 : -0.1;
+      const s2 = observe(e, task, p);
+      const next = ok ? 0 : Math.max(...qrow(s2));
+      row[a] += ALPHA * (r + GAMMA * next - row[a]);
+      s = s2;
+      if (ok) break;
+    }
+    return { ok, n };
+  }
+
+  function trainChunk(count) {
+    for (let k = 0; k < count; k++) {
+      const task = TASKS[trained % TASKS.length];
+      const st = stats[task.id];
+      const eps = Math.max(0.05, 1 - st.tries / 120);
+      const r = episode(task, eps);
+      st.tries++; st.wins.push(r.ok); st.steps.push(r.n);
+      if (st.wins.length > 30) { st.wins.shift(); st.steps.shift(); }
+      trained++;
+    }
+  }
+
+  function renderSkills() {
+    $('skills').innerHTML = '';
+    let total = 0;
+    for (const t of TASKS) {
+      const st = stats[t.id];
+      const rate = st.wins.length ? st.wins.filter(Boolean).length / st.wins.length : 0;
+      const okSteps = st.steps.filter((_, i) => st.wins[i]);
+      const avg = okSteps.length ? (okSteps.reduce((a, b) => a + b, 0) / okSteps.length).toFixed(1) : '–';
+      total += rate;
+      const row = document.createElement('div');
+      row.className = 'skill';
+      row.innerHTML = `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${avg} pas</span>`;
+      row.querySelector('b').textContent = t.label;
+      $('skills').append(row);
+    }
+    const m = total / TASKS.length;
+    $('level').textContent = trained === 0 ? 'débutant, jamais entraîné' : m > 0.9 ? `expert · ${trained} essais` : m > 0.6 ? `apprenti · ${trained} essais` : `débutant · ${trained} essais`;
+  }
+
+  // ---------- Affichage du bureau ----------
+  const env = new Env().reset(false);
+  function render(e = env) {
+    for (const app of ['terminal', 'fichiers', 'editeur']) {
+      const w = $('w-' + app);
+      w.hidden = !e.open.includes(app);
+      w.classList.toggle('focus', e.focus === app);
+      document.querySelector(`.app-icon[data-app="${app}"]`).classList.toggle('on', e.open.includes(app));
+    }
+    const tb = $('termbody');
+    tb.textContent = '';
+    for (const { line, err } of e.term.slice(-14)) {
+      const d = document.createElement('div');
+      d.textContent = line;
+      if (err) d.className = 'err';
+      tb.append(d);
+    }
+    const pr = document.createElement('div');
+    pr.className = 'prompt';
+    pr.innerHTML = `<span></span>$ <i id="typing"></i><span class="caret"></span>`;
+    pr.firstChild.textContent = e.cwd.replace(HOME, '~') + ' ';
+    tb.append(pr);
+    $('fmpath').textContent = e.fm.replace(HOME, '~');
+    $('fmlist').textContent = '';
+    for (const name of e.list(e.fm)) {
+      const it = document.createElement('div');
+      it.className = 'item' + (e.isDir(e.fm + '/' + name) ? '' : ' file');
+      it.dataset.name = name;
+      it.innerHTML = '<div class="ic"></div><div></div>';
+      it.lastChild.textContent = name;
+      $('fmlist').append(it);
+    }
+    $('edbody').textContent = e.ed.text;
+    $('edname').textContent = e.ed.name || 'sans titre';
+    $('trashn').hidden = !e.trash.length;
+    $('trashn').textContent = e.trash.length;
+  }
+
+  // ---------- Animation : curseur, clics, frappe ----------
+  let speed = 1;
+  const sleep = ms => new Promise(r => setTimeout(r, ms / speed));
+  const cursor = $('cursor');
+  function moveTo(el) {
+    const d = $('desk').getBoundingClientRect(), r = el.getBoundingClientRect();
+    cursor.style.transitionDuration = (0.45 / speed) + 's';
+    cursor.style.left = (r.left - d.left + r.width / 2) + 'px';
+    cursor.style.top = (r.top - d.top + r.height / 2) + 'px';
+    return sleep(480);
+  }
+  async function click() { cursor.classList.remove('click'); void cursor.offsetWidth; cursor.classList.add('click'); await sleep(160); }
+  function bubble(text) {
+    const b = $('bubble'), d = $('desk').getBoundingClientRect(), c = cursor.getBoundingClientRect();
+    b.textContent = text;
+    b.style.left = Math.min(d.width * 0.52, Math.max(8, c.left - d.left + 18)) + 'px';
+    b.style.top = Math.max(32, c.top - d.top - 34) + 'px';
+    b.classList.add('show');
+    clearTimeout(bubble.t);
+    bubble.t = setTimeout(() => b.classList.remove('show'), 1600 / speed);
+  }
+  const CMD = { LS: () => 'ls', PWD: () => 'pwd', MKDIR: p => 'mkdir ' + p.dir, CD: p => 'cd ' + p.dir, CDUP: () => 'cd ..', TOUCH: p => 'touch ' + p.file, CAT: p => 'cat ' + p.file, RM: p => 'rm ' + p.file };
+
+  function targetFor(a, p, e) {
+    const icon = app => document.querySelector(`.app-icon[data-app="${app}"]`);
+    if (a === 'OPEN_TERM') return icon('terminal');
+    if (a === 'OPEN_FILES') return icon('fichiers');
+    if (a === 'OPEN_EDIT') return icon('editeur');
+    if (a === 'CLOSE') return e.focus ? document.querySelector(`[data-close="${e.focus}"]`) : $('desk');
+    if (CMD[a]) return e.open.includes('terminal') ? $('termbody') : $('desk');
+    if (a === 'TYPE') return e.open.includes('editeur') ? $('edbody') : $('desk');
+    if (a === 'SAVE') return e.open.includes('editeur') ? $('savebtn') : $('desk');
+    if (a === 'FM_TRASH') return document.querySelector(`#fmlist [data-name="${CSS.escape(p.file || '')}"]`) || ($('w-fichiers').hidden ? $('desk') : $('fmlist'));
+    if (a === 'FM_UP') return $('fmpath');
+    return $('desk');
+  }
+
+  async function act(e, a, p) {
+    const t = targetFor(a, p, e);
+    await moveTo(t);
+    if (CMD[a] && e.focus === 'terminal') {
+      const txt = CMD[a](p);
+      for (let i = 1; i <= txt.length; i++) { const ty = $('typing'); if (ty) ty.textContent = txt.slice(0, i); await sleep(45); }
+    }
+    if (a === 'TYPE' && e.focus === 'editeur') {
+      for (let i = 1; i <= p.text.length; i++) { $('edbody').textContent = p.text.slice(0, i); await sleep(30); }
+    }
+    await click();
+    if (a === 'FM_TRASH' && e.focus === 'fichiers') { await moveTo(document.querySelector('.app-icon[data-app="corbeille"]')); }
+    const valid = e.step(a, p);
+    render(e);
+    await sleep(220);
+    return valid;
+  }
+
+  const label = (a, p) => CMD[a] ? '$ ' + CMD[a](p) : ({ OPEN_TERM: 'ouvre le terminal', OPEN_FILES: 'ouvre Fichiers', OPEN_EDIT: 'ouvre l’éditeur', CLOSE: 'ferme une fenêtre', TYPE: `tape « ${p.text} »`, SAVE: `enregistre ${p.file}`, FM_TRASH: `glisse ${p.file} dans la corbeille`, FM_UP: 'remonte d’un dossier' })[a];
+
+  // Joue un objectif avec ce que l'agent a appris (presque sans hasard)
+  async function perform(e, task, p, animate = true) {
+    const log = [];
+    for (let n = 0; n < MAX_STEPS; n++) {
+      const row = qrow(observe(e, task, p));
+      const a = ACTIONS[Math.random() < 0.03 ? rnd(ACTIONS.length) : argmax(row)];
+      const valid = animate ? await act(e, a, p) : e.step(a, p);
+      log.push((valid ? '' : '✗ ') + label(a, p));
+      if (task.done(e, p)) return { ok: true, log };
+    }
+    return { ok: false, log };
+  }
+
+  let busy = false;
+  const lock = on => { busy = on; for (const id of ['train', 'forget', 'show', 'free']) $(id).disabled = on; };
+
+  // ---------- Mode libre : il choisit ses propres objectifs ----------
+  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'voyages', 'robots', 'archives'];
+  const FILES = ['memo.txt', 'plan.txt', 'poeme.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  function chooseGoal(e, mem) {
+    const home = e.list(HOME);
+    const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
+    const newDir = DIRS.filter(d => !home.includes(d));
+    const newFile = FILES.filter(f => !home.includes(f) && !mem.made.has(f));
+    const mine = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
+    const junk = home.filter(n => !e.isDir(HOME + '/' + n) && (n.endsWith('.png') || (mem.made.has(n) && mem.read.has(n))));
+    const c = [];
+    c.push({ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' });
+    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je suis curieux : que contient ${f} ?` }); }
+    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je me fais un dossier « ${d} ».` }); }
+    if (mine.length && newFile.length) { const d = pick(mine), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans mon dossier ${d}.` }); }
+    if (newFile.length) { const f = pick(newFile); c.push({ t: 'write', p: { file: f, text: compose(e, mem) }, why: `J’écris quelque chose dans ${f}.` }); }
+    if (junk.length) { const f = pick(junk); c.push({ t: 'trash', p: { file: f }, why: `${f} ne me sert plus, je le jette.` }); }
+    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6;
+    return c.sort((a, b) => b.score - a.score)[0];
+  }
+  function compose(e, mem) {
+    const n = e.list(HOME).length;
+    const ideas = [`J'ai ${n} choses dans mon dossier.`, 'Bonjour, je suis un petit agent.', 'Aujourd hui j apprends Linux.'];
+    if (mem.seen.notes) ideas.push('Ne pas oublier : ' + mem.seen.notes.split(':')[1].trim());
+    if (mem.dirs.size) ideas.push('Mes dossiers : ' + [...mem.dirs].join(', '));
+    return pick(ideas);
+  }
+
+  async function freeRun(goals = 10) {
+    lock(true);
+    $('journal').textContent = '';
+    const e = new Env().reset(false);
+    render(e);
+    const mem = { read: new Set(), made: new Set(), dirs: new Set(), count: {}, seen: {} };
+    let wins = 0, actions = 0;
+    const t0 = 9 * 60;
+    for (let i = 0; i < goals; i++) {
+      const g = chooseGoal(e, mem);
+      const clockTxt = `${String((t0 + i * 3) / 60 | 0).padStart(2, '0')}:${String((t0 + i * 3) % 60).padStart(2, '0')}`;
+      $('clock').textContent = clockTxt;
+      bubble(g.why);
+      await sleep(700);
+      const r = await perform(e, T[g.t], g.p, true);
+      actions += r.log.length;
+      mem.count[g.t] = (mem.count[g.t] || 0) + 1;
+      if (r.ok) {
+        wins++;
+        if (g.t === 'cat') { mem.read.add(g.p.file); mem.seen[g.p.file.replace('.txt', '')] = e.fs.get(HOME + '/' + g.p.file)?.c; }
+        if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
+        if (g.t === 'write') mem.made.add(g.p.file);
+        if (g.t === 'touch') mem.made.add(g.p.file);
+      }
+      const li = document.createElement('li');
+      li.className = r.ok ? 'ok' : 'ko';
+      li.innerHTML = `<b></b> <span></span><br><code></code>`;
+      li.querySelector('b').textContent = clockTxt;
+      li.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.log.length} action${r.log.length > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
+      li.querySelector('code').textContent = r.log.join(' → ');
+      $('journal').append(li);
+      $('journal').scrollTop = $('journal').scrollHeight;
+    }
+    const sum = document.createElement('li');
+    sum.className = 'sum';
+    sum.textContent = `Bilan : ${goals} objectifs choisis tout seul, ${wins} réussis, ${actions} actions. Dossier final : ${e.list(HOME).join(', ')}. Corbeille : ${e.trash.map(t => t.name).join(', ') || 'vide'}.`;
+    $('journal').append(sum);
+    $('journal').scrollTop = $('journal').scrollHeight;
+    lock(false);
+  }
+
+  // ---------- Commandes ----------
+  for (const t of TASKS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; $('taskSel').append(o); }
+
+  $('train').addEventListener('click', () => {
+    if (busy) return;
+    lock(true);
+    let done = 0;
+    const total = 1400;
+    (function chunk() {
+      trainChunk(70); done += 70;
+      $('progress').firstChild.style.width = (done / total * 100) + '%';
+      renderSkills();
+      if (done < total) setTimeout(chunk, 30); else lock(false);
+    })();
+  });
+  $('forget').addEventListener('click', () => {
+    Qt = new Map(); trained = 0;
+    for (const t of TASKS) stats[t.id] = { tries: 0, wins: [], steps: [] };
+    $('progress').firstChild.style.width = '0';
+    renderSkills();
+  });
+  $('show').addEventListener('click', async () => {
+    if (busy) return;
+    lock(true);
+    const task = T[$('taskSel').value];
+    const e = new Env().reset(true);
+    render(e);
+    bubble('Objectif : ' + task.label.toLowerCase());
+    await sleep(900);
+    const r = await perform(e, task, task.p, true);
+    bubble(r.ok ? `Réussi en ${r.log.length} actions !` : 'Raté… il faut m’entraîner.');
+    lock(false);
+  });
+  $('free').addEventListener('click', () => { if (!busy) freeRun(10); });
+  document.querySelectorAll('[data-sp]').forEach(b => b.addEventListener('click', () => {
+    speed = +b.dataset.sp;
+    document.querySelectorAll('[data-sp]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+
+  render(env);
+  renderSkills();
+  window.__agent = { trainChunk, stats, TASKS, freeRun };
+})();
+</script>
