@@ -1,0 +1,342 @@
+<title>Skin 3D de l'agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Ambiance sombre unique : la scène 3D prend toute la place, une barre d'animations flotte en bas */
+:root {
+  --bg: #0b0d12;
+  --panel: rgba(18, 22, 30, 0.86);
+  --line: #2a3242;
+  --text: #e6e9ef;
+  --dim: #8a93a6;
+  --accent: #ffb547;
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); overflow: hidden; }
+#scene { position: fixed; inset: 0; }
+#scene canvas { display: block; width: 100%; height: 100%; }
+header {
+  position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 2; pointer-events: none;
+  padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+h1 { margin: 0; font-size: 18px; font-weight: 600; }
+h1 span { color: var(--accent); }
+#state { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+#state b { color: var(--accent); font-weight: 600; }
+.bar {
+  position: fixed; z-index: 2; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: min(760px, calc(100% - 32px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(10px);
+  padding: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+}
+button { font: inherit; font-size: 13px; color: var(--text); background: #0f131a; border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+button:hover { border-color: var(--dim); }
+button:active { transform: scale(0.97); }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sep { width: 1px; background: var(--line); margin: 0 4px; }
+@media (max-width: 520px) { button { font-size: 12px; padding: 6px 9px; } .sep { display: none; } }
+</style>
+
+<div id="scene" aria-label="Aperçu 3D de l'agent : une tête de robot et deux mains flottantes"></div>
+<header>
+  <h1>Skin 3D de l’<span>agent</span></h1>
+  <div id="state">animation : <b id="anim">repos</b></div>
+</header>
+<div class="bar" id="bar">
+  <button data-a="repos" aria-pressed="true">Repos</button>
+  <button data-a="saluer">Saluer</button>
+  <button data-a="taper">Taper au clavier</button>
+  <button data-a="cliquer">Cliquer</button>
+  <button data-a="reflechir">Réfléchir</button>
+  <button data-a="reussi">Réussi !</button>
+  <button data-a="erreur">Erreur</button>
+  <span class="sep"></span>
+  <button id="auto" aria-pressed="true">Démo auto</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mount = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  mount.append(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d12);
+  scene.fog = new THREE.Fog(0x0b0d12, 9, 18);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 50);
+
+  // ---------- Lumières ----------
+  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.75));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
+  key.position.set(3, 5, 4); key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024); key.shadow.camera.near = 1; key.shadow.camera.far = 15;
+  Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 });
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffb547, 0.9); rim.position.set(-4, 2, -3); scene.add(rim);
+  const fill = new THREE.PointLight(0x4fd6e3, 0.6, 8); fill.position.set(0, 0.3, 3); scene.add(fill);
+
+  // Sol : un disque qui reçoit l'ombre, avec un halo dessiné sur une texture
+  const haloTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 10, 128, 128, 128);
+    gr.addColorStop(0, 'rgba(255,181,71,0.22)'); gr.addColorStop(0.5, 'rgba(79,214,227,0.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+  })();
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = -1.9; scene.add(halo);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(3.4, 64), new THREE.ShadowMaterial({ opacity: 0.35 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -1.89; ground.receiveShadow = true; scene.add(ground);
+
+  // ---------- Matériaux ----------
+  const M = {
+    shell: new THREE.MeshStandardMaterial({ color: 0xe9edf2, roughness: 0.35, metalness: 0.1 }),
+    shellDark: new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.5, metalness: 0.4 }),
+    visor: new THREE.MeshStandardMaterial({ color: 0x0a0d12, roughness: 0.12, metalness: 0.6 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0x4fd6e3, emissive: 0x4fd6e3, emissiveIntensity: 0.9, roughness: 0.3 }),
+    accent: new THREE.MeshStandardMaterial({ color: 0xffb547, emissive: 0xff9a1f, emissiveIntensity: 0.6, roughness: 0.35 }),
+    glove: new THREE.MeshStandardMaterial({ color: 0xf6f7fa, roughness: 0.55, metalness: 0.02 }),
+    key: new THREE.MeshStandardMaterial({ color: 0x232a36, roughness: 0.6 }),
+    keyTop: new THREE.MeshStandardMaterial({ color: 0x2f3747, roughness: 0.5 })
+  };
+  const shadowy = m => { m.castShadow = true; return m; };
+
+  // ---------- La tête ----------
+  const agent = new THREE.Group(); scene.add(agent);
+  const head = new THREE.Group(); agent.add(head);
+  const skull = shadowy(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), M.shell));
+  skull.scale.set(1.08, 0.98, 1); head.add(skull);
+  // Visière : une calotte sombre posée sur l'avant de la tête
+  // Dans three.js, l'angle phi = π/2 pointe vers l'avant (+z) : la visière est centrée là
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(1.012, 64, 32, Math.PI / 2 - 0.78, 1.56, Math.PI * 0.26, Math.PI * 0.44), M.visor);
+  visor.scale.copy(skull.scale); head.add(visor);
+  // Yeux lumineux (on les écrase pour cligner, on les plie pour sourire)
+  const eyes = [-1, 1].map(s => {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 16), M.eye);
+    m.scale.set(0.8, 1.35, 0.35);
+    g.add(m);
+    g.position.set(0.3 * s, 0.1, 0.975);
+    g.lookAt(0.3 * s * 2, 0.2, 3);
+    head.add(g);
+    return { g, m, s };
+  });
+  // Bouche : un petit arc lumineux
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.022, 10, 32, Math.PI), M.eye);
+  mouth.position.set(0, -0.2, 0.985); mouth.rotation.z = Math.PI; head.add(mouth);
+  // Oreilles et antenne
+  for (const s of [-1, 1]) {
+    const ear = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.16, 32), M.shellDark));
+    ear.rotation.z = Math.PI / 2; ear.position.set(1.08 * s, 0, 0); head.add(ear);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.03, 10, 32), M.accent);
+    ring.rotation.y = Math.PI / 2; ring.position.set(1.17 * s, 0, 0); head.add(ring);
+  }
+  const antenna = new THREE.Group(); antenna.position.set(0, 0.96, 0); head.add(antenna);
+  antenna.add(shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.42, 12), M.shellDark)));
+  antenna.children[0].position.y = 0.2;
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 16), M.accent); tip.position.y = 0.46; antenna.add(tip);
+
+  // ---------- Les mains ----------
+  // Chaque main : une paume, quatre doigts à deux phalanges et un pouce. Toutes les articulations peuvent se plier.
+  function makeHand(side) {
+    const hand = new THREE.Group();
+    const wrist = new THREE.Group(); hand.add(wrist);
+    const cuff = shadowy(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.07, 12, 32), M.accent));
+    cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.36; wrist.add(cuff);
+    const palm = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), M.glove));
+    palm.scale.set(1, 1.05, 0.55); wrist.add(palm);
+    const fingers = [];
+    const spread = [-0.17, -0.055, 0.06, 0.17], lens = [0.17, 0.2, 0.19, 0.15];
+    spread.forEach((x, i) => {
+      const base = new THREE.Group(); base.position.set(x * side, 0.26, 0); base.rotation.z = -x * side * 0.6; wrist.add(base);
+      const seg = (len, parent) => {
+        const piv = new THREE.Group(); parent.add(piv);
+        const bone = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.062, len, 14), M.glove)); bone.position.y = len / 2; piv.add(bone);
+        const knuckle = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), M.glove)); piv.add(knuckle);
+        const end = new THREE.Group(); end.position.y = len; piv.add(end);
+        return { piv, end };
+      };
+      const a = seg(lens[i], base), b = seg(lens[i] * 0.85, a.end);
+      const tipBall = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.058, 14, 10), M.glove)); b.end.add(tipBall);
+      fingers.push({ a: a.piv, b: b.piv, tip: b.end });
+    });
+    const thumbBase = new THREE.Group(); thumbBase.position.set(0.24 * side, 0.02, 0.06); thumbBase.rotation.z = -1.0 * side; wrist.add(thumbBase);
+    const tA = new THREE.Group(); thumbBase.add(tA);
+    const tb = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.07, 0.2, 14), M.glove)); tb.position.y = 0.1; tA.add(tb);
+    const tt = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.066, 14, 10), M.glove)); tt.position.y = 0.2; tA.add(tt);
+    agent.add(hand);
+    return { hand, wrist, fingers, thumb: tA, side, pos: new THREE.Vector3(), rot: new THREE.Euler(), curl: [0, 0, 0, 0], thumbCurl: 0 };
+  }
+  const hands = { L: makeHand(-1), R: makeHand(1) };
+
+  // Petit clavier qui apparaît quand il tape
+  const keyboard = new THREE.Group();
+  const kbBase = shadowy(new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.08, 0.8), M.key)); keyboard.add(kbBase);
+  const keys = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 11; c++) {
+    const k = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.16), M.keyTop));
+    k.position.set(-1.0 + c * 0.2 + (r % 2) * 0.05, 0.065, -0.22 + r * 0.22);
+    keyboard.add(k); keys.push(k);
+  }
+  keyboard.position.set(0, -1.25, 1.15); keyboard.rotation.x = 0.15; keyboard.scale.setScalar(0.001); scene.add(keyboard);
+
+  // ---------- Poses : où vont les mains, comment se plient les doigts ----------
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const E = (x, y, z) => new THREE.Euler(x, y, z);
+  const POSES = {
+    repos: t => ({
+      L: { p: V(-1.55, -0.55 + Math.sin(t * 1.6) * 0.07, 0.35), r: E(0.1, 0.3, 0.25), curl: [0.35, 0.3, 0.3, 0.35], thumb: 0.2 },
+      R: { p: V(1.55, -0.55 + Math.sin(t * 1.6 + 1.2) * 0.07, 0.35), r: E(0.1, -0.3, -0.25), curl: [0.35, 0.3, 0.3, 0.35], thumb: 0.2 },
+      head: E(Math.sin(t * 0.7) * 0.05, Math.sin(t * 0.5) * 0.18, 0), mood: 'calme'
+    }),
+    saluer: t => ({
+      L: { p: V(-1.5, -0.6, 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
+      R: { p: V(1.45, 0.75, 0.45), r: E(0, -0.2, -0.25 + Math.sin(t * 9) * 0.45), curl: [0, 0, 0, 0], thumb: 0 },
+      head: E(0, -0.15, Math.sin(t * 4.5) * 0.06), mood: 'content'
+    }),
+    taper: t => {
+      const tapL = k => Math.max(0, Math.sin(t * 14 + k * 1.7)) * 0.9, tapR = k => Math.max(0, Math.sin(t * 13 + k * 2.1 + 1)) * 0.9;
+      return {
+        L: { p: V(-0.55, -1.0 + Math.abs(Math.sin(t * 7)) * 0.04, 1.2), r: E(-1.35, 0.15, 0.05), curl: [0.3 + tapL(0), 0.3 + tapL(1), 0.3 + tapL(2), 0.3 + tapL(3)], thumb: 0.3 },
+        R: { p: V(0.55, -1.0 + Math.abs(Math.sin(t * 7 + 1)) * 0.04, 1.2), r: E(-1.35, -0.15, -0.05), curl: [0.3 + tapR(0), 0.3 + tapR(1), 0.3 + tapR(2), 0.3 + tapR(3)], thumb: 0.3 },
+        head: E(0.32, Math.sin(t * 0.8) * 0.06, 0), mood: 'concentre', keyboard: true
+      };
+    },
+    cliquer: t => {
+      const poke = Math.max(0, Math.sin(t * 5)) ** 3;
+      return {
+        L: { p: V(-1.5, -0.6, 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
+        R: { p: V(1.05, -0.65, 1.0 + poke * 0.5), r: E(-1.2, -0.35, 0), curl: [0, 1.5, 1.5, 1.5], thumb: 1.0 },
+        head: E(0.12, -0.25, 0), mood: 'concentre', poke
+      };
+    },
+    reflechir: t => ({
+      L: { p: V(-1.45, -0.7, 0.3), r: E(0.1, 0.3, 0.3), curl: [0.6, 0.6, 0.6, 0.6], thumb: 0.5 },
+      R: { p: V(0.42, -1.02, 0.9), r: E(-0.3, -0.4, 0.5), curl: [0.2, 1.2, 1.3, 1.3], thumb: 0.6 },
+      head: E(-0.22 + Math.sin(t) * 0.03, 0.25, 0.12), mood: 'pense'
+    }),
+    reussi: t => ({
+      L: { p: V(-1.35, 0.95 + Math.abs(Math.sin(t * 6)) * 0.18, 0.3), r: E(0, 0.2, 0.35), curl: [0, 0, 0, 0], thumb: 0 },
+      R: { p: V(1.35, 0.95 + Math.abs(Math.sin(t * 6 + 0.5)) * 0.18, 0.3), r: E(0, -0.2, -0.35), curl: [0, 0, 0, 0], thumb: 0 },
+      head: E(-0.15, Math.sin(t * 6) * 0.1, 0), mood: 'joie', bounce: Math.abs(Math.sin(t * 6)) * 0.12
+    }),
+    erreur: t => ({
+      L: { p: V(-0.85, 0.15, 0.85), r: E(-0.4, 0.6, 0.6), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+      R: { p: V(0.85, 0.15, 0.85), r: E(-0.4, -0.6, -0.6), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+      head: E(0.08, Math.sin(t * 16) * 0.22 * Math.max(0, 1 - (t % 2.2)), 0), mood: 'erreur'
+    })
+  };
+
+  // ---------- Animation ----------
+  let current = 'repos', since = 0, auto = true;
+  const ORDER = ['repos', 'saluer', 'taper', 'cliquer', 'reflechir', 'reussi', 'erreur'];
+  const LABEL = { repos: 'repos', saluer: 'saluer', taper: 'taper au clavier', cliquer: 'cliquer', reflechir: 'réfléchir', reussi: 'réussi !', erreur: 'erreur' };
+  const pointer = new THREE.Vector2(0, 0);
+  let blink = 0, nextBlink = 2;
+  const lerp = (a, b, k) => a + (b - a) * k;
+
+  function setAnim(name, fromUser) {
+    current = name; since = 0;
+    if (fromUser) { auto = false; document.getElementById('auto').setAttribute('aria-pressed', 'false'); }
+    document.getElementById('anim').textContent = LABEL[name];
+    document.querySelectorAll('[data-a]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.a === name)));
+  }
+
+  function poseHand(h, target, k) {
+    h.pos.lerp(target.p, k);
+    h.hand.position.copy(h.pos);
+    h.rot.set(lerp(h.rot.x, target.r.x, k), lerp(h.rot.y, target.r.y, k), lerp(h.rot.z, target.r.z, k));
+    h.hand.rotation.copy(h.rot);
+    h.fingers.forEach((f, i) => {
+      h.curl[i] = lerp(h.curl[i], target.curl[i], Math.min(1, k * 1.6));
+      f.a.rotation.x = h.curl[i]; f.b.rotation.x = h.curl[i] * 1.15;
+    });
+    h.thumbCurl = lerp(h.thumbCurl, target.thumb, k);
+    h.thumb.rotation.x = h.thumbCurl * 0.8; h.thumb.rotation.z = h.thumbCurl * 0.6 * h.side;
+  }
+
+  const clock = new THREE.Clock();
+  let t = 0;
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta()) * (reduced ? 0.4 : 1);
+    t += dt; since += dt;
+    if (auto && since > (current === 'repos' ? 3 : 3.6)) setAnim(ORDER[(ORDER.indexOf(current) + 1) % ORDER.length], false);
+    const P = POSES[current](t);
+    const k = Math.min(1, dt * 7);
+
+    // Tête : flotte, regarde vers le pointeur en plus de la pose
+    agent.position.y = Math.sin(t * 1.6) * 0.06 + (P.bounce || 0);
+    head.rotation.x = lerp(head.rotation.x, P.head.x - pointer.y * 0.15, k);
+    head.rotation.y = lerp(head.rotation.y, P.head.y + pointer.x * 0.3, k);
+    head.rotation.z = lerp(head.rotation.z, P.head.z, k);
+    poseHand(hands.L, P.L, k);
+    poseHand(hands.R, P.R, k);
+
+    // Yeux : clignements et expressions
+    nextBlink -= dt;
+    if (nextBlink <= 0) { blink = 0.16; nextBlink = 2 + Math.random() * 3; }
+    blink = Math.max(0, blink - dt);
+    const open = blink > 0 ? 0.12 : 1;
+    eyes.forEach(({ m, s }) => {
+      let sx = 0.8, sy = 1.35 * open, rz = 0;
+      if (P.mood === 'joie') { sy = 0.45; sx = 1.05; }
+      if (P.mood === 'concentre') sy = 0.9 * open;
+      if (P.mood === 'pense') { sy = 1.1 * open; m.position.y = lerp(m.position.y, 0.06, k); } else m.position.y = lerp(m.position.y, 0, k);
+      if (P.mood === 'erreur') { sx = 1.0; sy = 0.4; rz = 0.6 * s; }
+      m.scale.x = lerp(m.scale.x, sx, k * 2); m.scale.y = lerp(m.scale.y, sy, Math.min(1, k * 3)); m.rotation.z = lerp(m.rotation.z, rz, k * 2);
+      m.position.x = lerp(m.position.x, pointer.x * 0.04, k);
+    });
+    const hue = P.mood === 'erreur' ? 0xff6b6b : P.mood === 'joie' ? 0x7ef0a0 : 0x4fd6e3;
+    M.eye.color.lerp(new THREE.Color(hue), k); M.eye.emissive.lerp(new THREE.Color(hue), k);
+    mouth.scale.y = lerp(mouth.scale.y, P.mood === 'joie' ? 1.4 : P.mood === 'erreur' ? -0.8 : P.mood === 'pense' ? 0.25 : 1, k);
+    M.accent.emissiveIntensity = 0.5 + (P.mood === 'pense' ? 0.9 + Math.sin(t * 8) * 0.6 : Math.sin(t * 2) * 0.2);
+    antenna.rotation.z = Math.sin(t * 2.2) * 0.08 + (P.mood === 'erreur' ? Math.sin(t * 30) * 0.15 : 0);
+
+    // Clavier
+    const ks = P.keyboard ? 1 : 0.001;
+    keyboard.scale.setScalar(lerp(keyboard.scale.x, ks, k));
+    if (P.keyboard) keys.forEach((kk, i) => { kk.position.y = 0.065 - (Math.sin(t * 13 + i * 2.3) > 0.85 ? 0.03 : 0); });
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  function resize() {
+    const w = mount.clientWidth, h = mount.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // Sur un écran étroit, la caméra recule pour garder la tête et les deux mains dans le cadre
+    const dist = w / h < 0.8 ? 10.5 : 7.2;
+    camera.position.set(0, 0.5, dist);
+    camera.lookAt(0, -0.2, 0);
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+  addEventListener('pointermove', e => { pointer.set(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); });
+  document.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => setAnim(b.dataset.a, true)));
+  document.getElementById('auto').addEventListener('click', ev => {
+    auto = !auto; ev.currentTarget.setAttribute('aria-pressed', String(auto)); since = 0;
+  });
+  resize();
+  // Poses de départ sans saut
+  const P0 = POSES.repos(0);
+  for (const s of ['L', 'R']) { hands[s].pos.copy(P0[s].p); hands[s].rot.copy(P0[s].r); }
+  window.__skin = { setAnim };
+  frame();
+})();
+</script>
