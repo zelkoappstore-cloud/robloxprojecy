@@ -317,7 +317,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   function endEpisode(ok) {
     state = 'done';
     S.target = null;
-    wait = ok ? 1.4 : 0.5;
+    wait = ok ? 2.2 : 0.5;
     Q.ep++;
     Q.hist.push({ steps, ok });
     if (ok) Q.best = Math.min(Q.best, steps);
@@ -325,11 +325,21 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     renderStats();
   }
 
+  // Le corps recule pour ne pas cacher le mot, et la patte tournée vers lui s'étire pour s'y poser
   function pinLegOn(w) {
-    let leg = legs.find(l => l.word === w);
-    if (!leg) {
-      let bestD = Infinity;
-      for (const l of legs) { const dd = dist(legFrame(l).coxaEnd, w); if (dd < bestD) { bestD = dd; leg = l; } }
+    const sr = stage.getBoundingClientRect(), b = w.el.getBoundingClientRect();
+    w.x = b.left - sr.left + b.width / 2; w.y = b.top - sr.top + b.height / 2;
+    const bx = S.x < w.x ? -0.45 : 0.45, by = w.y < H / 2 ? 1 : -1, bl = Math.hypot(bx, by);
+    const back = { x: bx / bl, y: by / bl };
+    const reach = (dims().femur + dims().tibia) * 0.85;
+    S.target = { x: w.x + back.x * reach, y: w.y + back.y * reach };
+    const want = Math.atan2(-back.y, -back.x);
+    let leg = null, bestD = Infinity;
+    for (const l of legs) {
+      const dd = Math.abs(Math.atan2(Math.sin(l.ang + S.rot - want), Math.cos(l.ang + S.rot - want)));
+      if (dd < bestD) { bestD = dd; leg = l; }
+    }
+    if (leg.word !== w) {
       lift(leg);
       leg.from = { ...leg.foot };
       leg.to = { x: w.x, y: w.y, word: w };
@@ -340,13 +350,13 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 
   function found(w) {
     if (path[path.length - 1] !== w.i) path.push(w.i);
-    pinLegOn(w);
     Q.answer.forEach(i => words[i].el.classList.add('ans'));
     const res = Q.extract(w);
     $('ans').textContent = res.text;
     $('src').textContent = res.src;
     $('answerBox').classList.add('found');
     endEpisode(true);
+    pinLegOn(w);
   }
 
   function fail() { endEpisode(false); }
@@ -481,7 +491,12 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       const f = legFrame(leg);
       const { k, foot } = knee(f.coxaEnd, leg.foot, d.femur, d.tibia);
       const path = () => { ctx.beginPath(); ctx.moveTo(f.hip.x, f.hip.y); ctx.lineTo(f.coxaEnd.x, f.coxaEnd.y); ctx.lineTo(k.x, k.y); ctx.lineTo(foot.x, foot.y); };
-      path(); ctx.strokeStyle = C.leg; ctx.lineWidth = lw; ctx.stroke();
+      const held = leg.pinned && leg.t >= 1;
+      path(); ctx.strokeStyle = held ? '#7ef0a0' : C.leg; ctx.lineWidth = held ? lw * 1.6 : lw; ctx.stroke();
+      if (held) {
+        ctx.beginPath(); ctx.arc(foot.x, foot.y, (6 + 2 * Math.sin(performance.now() / 120)) * u, 0, Math.PI * 2);
+        ctx.strokeStyle = '#7ef0a0'; ctx.lineWidth = 1.2; ctx.stroke();
+      }
       dot(f.coxaEnd, jr, C.joint);
       dot(k, jr, C.joint);
       dot(foot, leg.t < 1 ? jr * 1.5 : jr * 1.15, C.joint);
