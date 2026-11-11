@@ -794,20 +794,27 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     $('level').textContent = head.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${head.trained.toLocaleString('fr-FR')} essais`;
   }
 
-  $('train').addEventListener('click', () => {
+  // Entraînement complet, découpé en petits morceaux pour que la page reste fluide
+  function trainAll() {
+    return new Promise(resolve => {
+      const total = 240000, chunk = 2000;
+      let done = 0;
+      hand.train(4000);
+      bubble('Je m’entraîne… regarde mes compétences monter.', 4000);
+      (function next() {
+        head.train(chunk); done += chunk;
+        $('progress').firstChild.style.width = (done / total * 100) + '%';
+        renderSkills();
+        if (done < total) setTimeout(next, 0); else resolve();
+      })();
+    });
+  }
+  $('train').addEventListener('click', async () => {
     if (busy) return;
     lock(true);
-    const total = 240000, chunk = 2000;
-    let done = 0;
-    hand.train(4000);
-    bubble('Je m’entraîne… regarde mes compétences monter.', 4000);
-    (function next() {
-      head.train(chunk); done += chunk;
-      $('progress').firstChild.style.width = (done / total * 100) + '%';
-      renderSkills();
-      if (done < total) setTimeout(next, 0);
-      else { lock(false); bubble('Entraînement terminé. Regarde-moi faire !'); }
-    })();
+    await trainAll();
+    lock(false);
+    bubble('Entraînement terminé. Regarde-moi faire !');
   });
   $('forget').addEventListener('click', () => { hand = new Hand(); head = new Head(); $('progress').firstChild.style.width = '0'; renderSkills(); });
 
@@ -820,12 +827,14 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     if (busy) return;
     lock(true);
     const task = T[$('taskSel').value];
+    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 1 min).', 4000); await trainAll(); }
     const e = new Env().reset(true);
     if (task.setup) task.setup(e);
     render(e, task.p);
     bubble('Objectif : ' + task.label.toLowerCase());
     await sleep(900);
     const r = await perform(e, task, task.p, true);
+    current = e;
     bubble(r.ok ? `Réussi en ${r.n} décision${r.n > 1 ? 's' : ''} !` : 'Raté… il faut encore m’entraîner.');
     lock(false);
   });
@@ -868,9 +877,12 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
     if (busy) return;
     lock(true);
     $('journal').textContent = '';
-    const e = new Env().reset(false);
+    // Sans entraînement, la main ne sait pas encore viser : il s'entraîne d'abord
+    if (!head.trained) { bubble('Je ne sais encore rien faire : je m’entraîne d’abord (environ 1 min).', 4000); await trainAll(); }
+    // Il part du bureau tel qu'il est à l'écran
+    const e = current;
+    e.run = null;
     render(e);
-    if (!head.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
     const mem = { read: new Set(), dirs: new Set(), launched: new Set(), count: {} };
     let wins = 0, decisions = 0;
     for (let i = 0; i < 12; i++) {
@@ -914,6 +926,7 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; col
 
   // État de départ : l'atelier de code et le bac à sable montrent un exemple
   const start = new Env().reset(false);
+  let current = start;
   start.open = ['terminal', 'fichiers', 'code']; start.focus = 'code';
   start.code = ['import tkinter as tk', 'fen = tk.Tk()', 'tk.Label(fen, text=‹texte›).pack()', 'fen.mainloop()'];
   start.run = start.launch(start.code, 'Exemple', 'atelier');
