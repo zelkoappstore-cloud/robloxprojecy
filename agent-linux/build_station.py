@@ -21,6 +21,10 @@ replacements = [
     ("  addEventListener('pointermove', e => { pointer.set(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); });\n", ""),
     ("  document.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => setAnim(b.dataset.a, true)));\n", ""),
     ("  document.getElementById('auto').addEventListener('click', ev => {\n    auto = !auto; ev.currentTarget.setAttribute('aria-pressed', String(auto)); since = 0;\n  });\n", ""),
+    ("const LABEL = { repos: 'repos',", "const LABEL = { souris: 'utiliser la souris', repos: 'repos',"),
+    # Le robot flotte moins quand il travaille, et sa hauteur de base peut être réglée par le poste
+    ("    agent.position.y = Math.sin(t * 1.6) * 0.05 + bounceSpring.step(P.bounce || 0, dt);",
+     "    agent.position.y = (window.SKIN_BASEY || 0) + Math.sin(t * 1.6) * ((P.keyboard || P.still) ? 0.012 : 0.05) + bounceSpring.step(P.bounce || 0, dt);"),
     ("  window.__skin = { setAnim };",
      "  window.SKIN = { THREE, scene, camera, renderer, agent, head, hands, keyboard, POSES, setAnim, pointer, M, V, E, resize, time: () => t };"),
 ]

@@ -55,7 +55,13 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #journal li { border-left: 3px solid var(--line); padding-left: 8px; }
 #journal li.ok { border-color: var(--ok); }
 #journal li.ko { border-color: var(--bad); }
-@media (max-width: 640px) { #journal { max-height: 96px; } }
+/* Téléphone : la scène 3D occupe l'espace entre l'en-tête et le journal, qui devient un bandeau en bas */
+@media (max-width: 760px), (max-aspect-ratio: 9/10) {
+  #scene { top: calc(92px + env(safe-area-inset-top, 0px)); bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+  #logbox { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; }
+  #journal { max-height: 72px; }
+  #bubble { top: calc(100px + env(safe-area-inset-top, 0px)); font-size: 13px; }
+}
 </style>
 
 <div id="scene" aria-label="L'agent robot devant son ordinateur 3D, dont l'écran montre son bureau Linux simulé"></div>
@@ -93,17 +99,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   const station = new THREE.Group(); S.scene.add(station);
   const deskMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7, metalness: 0.05 });
   const metal = new THREE.MeshStandardMaterial({ color: 0x2b313d, roughness: 0.4, metalness: 0.6 });
+  // Le bureau (plateau + pieds) est un groupe : on peut le rétrécir pour l'écran d'un téléphone
+  const deskGroup = new THREE.Group(); station.add(deskGroup);
   const desk = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.12, 2.8), deskMat);
-  desk.position.set(0, -1.38, 0.9); desk.receiveShadow = true; desk.castShadow = true; station.add(desk);
+  desk.position.set(0, -1.38, 0.9); desk.receiveShadow = true; desk.castShadow = true; deskGroup.add(desk);
   for (const [x, z] of [[-3, -0.35], [3, -0.35], [-3, 2.15], [3, 2.15]]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), metal); leg.position.set(x, -1.68, z); station.add(leg);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), metal); leg.position.set(x, -1.68, z); deskGroup.add(leg);
   }
 
-  // L'agent se place à gauche, tourné vers l'écran
+  // L'agent flotte et sautille, mais le clavier et la souris restent posés sur le bureau :
+  // ils vivent dans un repère fixe placé exactement comme l'agent, sans ses mouvements
   const agent = S.agent;
-  agent.position.set(-1.8, 0, -0.25);
-  agent.rotation.y = 0.55;
-  agent.add(S.keyboard);
+  const deskFrame = new THREE.Group(); station.add(deskFrame);
+  deskFrame.add(S.keyboard);
   S.keyboard.position.set(0, -1.27, 1.05); S.keyboard.rotation.x = 0.05;
   window.SKIN_KB = true;
 
@@ -113,7 +121,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   mBody.scale.set(0.75, 0.4, 1.05); mBody.castShadow = true; mouseObj.add(mBody);
   const mStripe = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.12), S.M.accent); mStripe.position.set(0, 0.06, -0.06); mouseObj.add(mStripe);
   const MOUSE_BASE = new THREE.Vector3(1.62, -1.26, 1.0);
-  mouseObj.position.copy(MOUSE_BASE); agent.add(mouseObj);
+  mouseObj.position.copy(MOUSE_BASE); mouseObj.scale.setScalar(1.35); deskFrame.add(mouseObj);
   const mouseOff = new THREE.Vector3();
 
   // Écran : un moniteur dont l'image est le bureau simulé de l'agent, dessiné en direct
@@ -130,9 +138,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   const glow = new THREE.PointLight(0x7aa7ff, 0.6, 5); glow.position.set(0, 0, 1.2); monitor.add(glow);
   const neck = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.12), metal); neck.position.set(0, -1.4, -0.12); monitor.add(neck);
   const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.06, 0.6), metal); foot.position.set(0, -1.76, 0); monitor.add(foot);
-  monitor.scale.setScalar(1.18);
-  monitor.position.set(1.3, 0.62, 0.5);
-  monitor.rotation.y = -0.6;
   station.add(monitor);
 
   // ---------- Pose « souris » : main droite sur la souris, main gauche posée sur le clavier ----------
@@ -142,17 +147,59 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     return {
       L: { p: S.V(-0.5, -0.92, 0.72), r: S.E(1.42, 0.12, 0.08), curl: [0.55, 0.5, 0.5, 0.55], thumb: 0.35 },
       R: { p: S.V(MOUSE_BASE.x + mouseOff.x, -1.02 - tap * 0.03, MOUSE_BASE.z - 0.32 + mouseOff.z), r: S.E(1.38, -0.15, -0.05), curl: [0.25 + tap * 0.45, 0.45, 0.6, 0.7], thumb: 0.55 },
-      head: S.E(0.12, 0, 0), mood: 'concentre'
+      head: S.E(0.12, 0, 0), mood: 'concentre', still: true
     };
   };
-  // Il regarde l'écran : tête et yeux tournés vers le moniteur
-  S.pointer.set(0.75, 0.15);
+  // ---------- Deux mises en page : écran large (agent à gauche, moniteur à droite) ou téléphone (moniteur au-dessus) ----------
+  let layout = null;
+  function applyLayout(portrait) {
+    if (layout === portrait) return;
+    layout = portrait;
+    if (portrait) {
+      agent.position.set(0, 0, 0.55); agent.rotation.y = 0; window.SKIN_BASEY = 0;
+      monitor.scale.setScalar(1.05); monitor.position.set(0, 2.7, -1.45); monitor.rotation.y = 0;
+      deskGroup.scale.set(0.66, 1, 1); deskGroup.position.set(0, 0, -0.35);
+      S.pointer.set(0, -0.75);   // il lève les yeux vers l'écran
+    } else {
+      agent.position.set(-1.8, 0, -0.25); agent.rotation.y = 0.55; window.SKIN_BASEY = 0;
+      monitor.scale.setScalar(1.18); monitor.position.set(1.3, 0.62, 0.5); monitor.rotation.y = -0.6;
+      deskGroup.scale.set(1, 1, 1); deskGroup.position.set(0, 0, 0);
+      S.pointer.set(0.75, 0.15); // il tourne la tête vers l'écran
+    }
+    deskFrame.position.set(agent.position.x, window.SKIN_BASEY, agent.position.z);
+    deskFrame.rotation.y = agent.rotation.y;
+  }
 
-  // ---------- Caméra ----------
+  // ---------- Caméra : elle recule juste ce qu'il faut pour que tout le poste tienne à l'écran ----------
+  const tmpV = new THREE.Vector3();
+  function keyPoints() {
+    S.scene.updateMatrixWorld(true);
+    const pts = [];
+    for (const [x, y] of [[-1.62, 1.12], [1.62, 1.12], [-1.62, -1.12], [1.62, -1.12]]) pts.push(monitor.localToWorld(new THREE.Vector3(x, y, 0)));
+    for (const [x, y, z] of [[0, 1.55, 0], [-1.7, -0.2, 0.4], [1.7, -0.2, 0.4]]) pts.push(agent.localToWorld(new THREE.Vector3(x, y, z)));
+    for (const [x, z] of [[-1.2, 0.6], [1.2, 0.6], [-1.2, 1.5], [1.2, 1.5]]) pts.push(deskFrame.localToWorld(new THREE.Vector3(x, -1.27, z)));
+    pts.push(deskFrame.localToWorld(MOUSE_BASE.clone().add(new THREE.Vector3(0.25, 0, 0.3))));
+    return pts;
+  }
   S.setCamera = (camera, w, h) => {
-    const narrow = w / h < 0.9;
-    camera.position.set(narrow ? 0.4 : 0.4, narrow ? 1.6 : 1.1, narrow ? 13.5 : 8.8);
-    camera.lookAt(0.2, -0.05, 0.5);
+    const portrait = w / h < 0.9;
+    applyLayout(portrait);
+    const pts = keyPoints();
+    const box = new THREE.Box3().setFromPoints(pts), target = box.getCenter(new THREE.Vector3());
+    const dir = (portrait ? new THREE.Vector3(0, 0.16, 1) : new THREE.Vector3(0.04, 0.14, 1)).normalize();
+    const margin = portrait ? 0.9 : 0.86;
+    let lo = 2, hi = 40;
+    for (let i = 0; i < 30; i++) {
+      const d = (lo + hi) / 2;
+      camera.position.copy(target).addScaledVector(dir, d);
+      camera.lookAt(target);
+      camera.updateMatrixWorld(); camera.updateProjectionMatrix();
+      const fits = pts.every(q => { tmpV.copy(q).project(camera); return Math.abs(tmpV.x) <= margin && Math.abs(tmpV.y) <= margin && tmpV.z < 1; });
+      if (fits) hi = d; else lo = d;
+    }
+    camera.position.copy(target).addScaledVector(dir, hi);
+    // Sur téléphone, on décale un peu la vue vers le bas pour laisser la place à l'en-tête
+    camera.lookAt(target.x, target.y + (portrait ? 0.25 : 0.1), target.z);
   };
   S.resize();
 
