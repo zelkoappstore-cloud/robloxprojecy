@@ -198,48 +198,66 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   // ---------- Poses : où vont les mains, comment se plient les doigts ----------
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const E = (x, y, z) => new THREE.Euler(x, y, z);
+  // Petits outils de mouvement : bruit doux (somme de sinus) et impulsion arrondie pour les frappes
+  const wobble = (t, seed, amp) => amp * (Math.sin(t * 1.3 + seed) * 0.6 + Math.sin(t * 2.1 + seed * 1.7) * 0.3 + Math.sin(t * 3.7 + seed * 0.4) * 0.1);
+  const pulse = (phase, width = 0.35) => { const x = ((phase % 1) + 1) % 1; return x < width ? Math.sin((x / width) * Math.PI) ** 2 : 0; };
+
+  // Orientation des mains : les doigts suivent l'axe +y de la main et se plient vers +z.
+  // Pour taper, on tourne la main de +90° autour de x : doigts vers l'avant, paume tournée vers le clavier.
   const POSES = {
     repos: t => ({
-      L: { p: V(-1.55, -0.55 + Math.sin(t * 1.6) * 0.07, 0.35), r: E(0.1, 0.3, 0.25), curl: [0.35, 0.3, 0.3, 0.35], thumb: 0.2 },
-      R: { p: V(1.55, -0.55 + Math.sin(t * 1.6 + 1.2) * 0.07, 0.35), r: E(0.1, -0.3, -0.25), curl: [0.35, 0.3, 0.3, 0.35], thumb: 0.2 },
-      head: E(Math.sin(t * 0.7) * 0.05, Math.sin(t * 0.5) * 0.18, 0), mood: 'calme'
+      L: { p: V(-1.55 + wobble(t, 1, 0.04), -0.5 + wobble(t * 0.9, 2, 0.08), 0.35 + wobble(t, 3, 0.04)), r: E(0.1 + wobble(t, 4, 0.06), 0.3, 0.25 + wobble(t, 5, 0.06)), curl: [0.35, 0.3, 0.32, 0.38], thumb: 0.2 },
+      R: { p: V(1.55 + wobble(t, 6, 0.04), -0.5 + wobble(t * 0.9, 7, 0.08), 0.35 + wobble(t, 8, 0.04)), r: E(0.1 + wobble(t, 9, 0.06), -0.3, -0.25 + wobble(t, 10, 0.06)), curl: [0.38, 0.32, 0.3, 0.35], thumb: 0.2 },
+      head: E(wobble(t * 0.6, 11, 0.06), wobble(t * 0.45, 12, 0.22), wobble(t * 0.5, 13, 0.03)), mood: 'calme'
     }),
-    saluer: t => ({
-      L: { p: V(-1.5, -0.6, 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
-      R: { p: V(1.45, 0.75, 0.45), r: E(0, -0.2, -0.25 + Math.sin(t * 9) * 0.45), curl: [0, 0, 0, 0], thumb: 0 },
-      head: E(0, -0.15, Math.sin(t * 4.5) * 0.06), mood: 'content'
-    }),
-    taper: t => {
-      const tapL = k => Math.max(0, Math.sin(t * 14 + k * 1.7)) * 0.9, tapR = k => Math.max(0, Math.sin(t * 13 + k * 2.1 + 1)) * 0.9;
+    saluer: t => {
+      const w = Math.sin(t * 7.5);
       return {
-        L: { p: V(-0.55, -1.0 + Math.abs(Math.sin(t * 7)) * 0.04, 1.2), r: E(-1.35, 0.15, 0.05), curl: [0.3 + tapL(0), 0.3 + tapL(1), 0.3 + tapL(2), 0.3 + tapL(3)], thumb: 0.3 },
-        R: { p: V(0.55, -1.0 + Math.abs(Math.sin(t * 7 + 1)) * 0.04, 1.2), r: E(-1.35, -0.15, -0.05), curl: [0.3 + tapR(0), 0.3 + tapR(1), 0.3 + tapR(2), 0.3 + tapR(3)], thumb: 0.3 },
-        head: E(0.32, Math.sin(t * 0.8) * 0.06, 0), mood: 'concentre', keyboard: true
+        L: { p: V(-1.5, -0.6 + wobble(t, 1, 0.05), 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
+        R: { p: V(1.4 + w * 0.08, 0.8 + Math.abs(w) * 0.05, 0.5), r: E(-0.1, -0.25, -0.15 + w * 0.5), curl: [0.05 + Math.max(0, -w) * 0.15, 0.03, 0.05, 0.1], thumb: 0.05 },
+        head: E(-0.05, -0.2, w * 0.05), mood: 'content'
+      };
+    },
+    taper: t => {
+      // Chaque doigt frappe à son tour, avec un rythme un peu irrégulier comme une vraie frappe
+      const tl = i => pulse(t * 3.1 + [0, 0.27, 0.55, 0.78][i] + Math.sin(t * 0.7) * 0.1, 0.22);
+      const tr = i => pulse(t * 3.4 + [0.12, 0.4, 0.66, 0.9][i] + Math.sin(t * 0.9) * 0.1, 0.22);
+      const bobL = Math.max(...[0, 1, 2, 3].map(tl)), bobR = Math.max(...[0, 1, 2, 3].map(tr));
+      return {
+        L: { p: V(-0.48 + Math.sin(t * 1.1) * 0.06, -0.86 - bobL * 0.05, 0.62), r: E(1.42, 0.12, 0.08), curl: [0, 1, 2, 3].map(i => 0.45 + tl(i) * 0.55), thumb: 0.35 },
+        R: { p: V(0.48 + Math.sin(t * 1.3 + 1) * 0.06, -0.86 - bobR * 0.05, 0.62), r: E(1.42, -0.12, -0.08), curl: [0, 1, 2, 3].map(i => 0.45 + tr(i) * 0.55), thumb: 0.35 },
+        head: E(0.34 + Math.sin(t * 1.7) * 0.02, Math.sin(t * 0.8) * 0.08, 0), mood: 'concentre', keyboard: true, taps: [tl, tr]
       };
     },
     cliquer: t => {
-      const poke = Math.max(0, Math.sin(t * 5)) ** 3;
+      const cyc = (t * 0.9) % 1, poke = cyc < 0.18 ? Math.sin((cyc / 0.18) * Math.PI) : 0;
       return {
-        L: { p: V(-1.5, -0.6, 0.4), r: E(0.1, 0.3, 0.25), curl: [0.5, 0.5, 0.5, 0.5], thumb: 0.4 },
-        R: { p: V(1.05, -0.65, 1.0 + poke * 0.5), r: E(-1.2, -0.35, 0), curl: [0, 1.5, 1.5, 1.5], thumb: 1.0 },
-        head: E(0.12, -0.25, 0), mood: 'concentre', poke
+        L: { p: V(-1.5, -0.6 + wobble(t, 2, 0.05), 0.4), r: E(0.1, 0.3, 0.25), curl: [0.55, 0.55, 0.55, 0.55], thumb: 0.4 },
+        R: { p: V(0.95, -0.55, 0.95 + poke * 0.35), r: E(1.25 - poke * 0.1, -0.3, 0), curl: [0.02, 1.45, 1.5, 1.5], thumb: 1.0 },
+        head: E(0.15, -0.28, 0), mood: 'concentre', poke
       };
     },
     reflechir: t => ({
-      L: { p: V(-1.45, -0.7, 0.3), r: E(0.1, 0.3, 0.3), curl: [0.6, 0.6, 0.6, 0.6], thumb: 0.5 },
-      R: { p: V(0.42, -1.02, 0.9), r: E(-0.3, -0.4, 0.5), curl: [0.2, 1.2, 1.3, 1.3], thumb: 0.6 },
-      head: E(-0.22 + Math.sin(t) * 0.03, 0.25, 0.12), mood: 'pense'
+      L: { p: V(-1.45, -0.7 + wobble(t, 3, 0.04), 0.3), r: E(0.1, 0.3, 0.3), curl: [0.6, 0.6, 0.6, 0.6], thumb: 0.5 },
+      R: { p: V(0.45, -1.02, 0.92), r: E(-0.3, -0.4, 0.5), curl: [0.2 + Math.max(0, Math.sin(t * 2.5)) * 0.25, 1.2, 1.3, 1.3], thumb: 0.6 },
+      head: E(-0.22 + Math.sin(t * 0.9) * 0.03, 0.28 + Math.sin(t * 0.6) * 0.05, 0.12), mood: 'pense'
     }),
-    reussi: t => ({
-      L: { p: V(-1.35, 0.95 + Math.abs(Math.sin(t * 6)) * 0.18, 0.3), r: E(0, 0.2, 0.35), curl: [0, 0, 0, 0], thumb: 0 },
-      R: { p: V(1.35, 0.95 + Math.abs(Math.sin(t * 6 + 0.5)) * 0.18, 0.3), r: E(0, -0.2, -0.35), curl: [0, 0, 0, 0], thumb: 0 },
-      head: E(-0.15, Math.sin(t * 6) * 0.1, 0), mood: 'joie', bounce: Math.abs(Math.sin(t * 6)) * 0.12
-    }),
-    erreur: t => ({
-      L: { p: V(-0.85, 0.15, 0.85), r: E(-0.4, 0.6, 0.6), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
-      R: { p: V(0.85, 0.15, 0.85), r: E(-0.4, -0.6, -0.6), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
-      head: E(0.08, Math.sin(t * 16) * 0.22 * Math.max(0, 1 - (t % 2.2)), 0), mood: 'erreur'
-    })
+    reussi: t => {
+      const hop = Math.abs(Math.sin(t * 5.5));
+      return {
+        L: { p: V(-1.3, 0.95 + hop * 0.2, 0.3), r: E(0, 0.2, 0.35 + Math.sin(t * 11) * 0.12), curl: [0, 0, 0, 0], thumb: 0 },
+        R: { p: V(1.3, 0.95 + Math.abs(Math.sin(t * 5.5 + 0.4)) * 0.2, 0.3), r: E(0, -0.2, -0.35 - Math.sin(t * 11 + 1) * 0.12), curl: [0, 0, 0, 0], thumb: 0 },
+        head: E(-0.15, Math.sin(t * 5.5) * 0.12, Math.sin(t * 2.75) * 0.06), mood: 'joie', bounce: hop * 0.14
+      };
+    },
+    erreur: t => {
+      const shake = Math.sin(t * 15) * Math.max(0, 1 - (t % 2.4) / 0.9);
+      return {
+        L: { p: V(-0.9, 0.2, 0.85), r: E(-0.4, 0.6, 0.6 + shake * 0.1), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+        R: { p: V(0.9, 0.2, 0.85), r: E(-0.4, -0.6, -0.6 - shake * 0.1), curl: [0.15, 0.15, 0.15, 0.15], thumb: 0.1 },
+        head: E(0.08, shake * 0.22, 0), mood: 'erreur'
+      };
+    }
   };
 
   // ---------- Animation ----------
@@ -249,6 +267,24 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   const pointer = new THREE.Vector2(0, 0);
   let blink = 0, nextBlink = 2;
   const lerp = (a, b, k) => a + (b - a) * k;
+  // Lissage indépendant du nombre d'images par seconde
+  const ease = (rate, dt) => 1 - Math.exp(-rate * dt);
+
+  // Ressort amorti : le mouvement accélère, ralentit et dépasse un tout petit peu, comme un vrai geste
+  class Spring {
+    constructor(v = 0, stiff = 90, damp = 15) { this.v = v; this.vel = 0; this.stiff = stiff; this.damp = damp; }
+    step(target, dt) {
+      const steps = Math.max(1, Math.ceil(dt / 0.008)), h = dt / steps;
+      for (let i = 0; i < steps; i++) { this.vel += ((target - this.v) * this.stiff - this.vel * this.damp) * h; this.v += this.vel * h; }
+      return this.v;
+    }
+  }
+  const springs3 = (stiff, damp) => [0, 0, 0].map(() => new Spring(0, stiff, damp));
+  for (const h of Object.values(hands)) {
+    h.sp = springs3(70, 14); h.sr = springs3(80, 15);
+    h.sc = [0, 1, 2, 3].map(() => new Spring(0, 260, 20)); h.st = new Spring(0, 160, 18);
+  }
+  const headSpring = springs3(55, 12), bounceSpring = new Spring(0, 120, 14), kbSpring = new Spring(0.001, 120, 16);
 
   function setAnim(name, fromUser) {
     current = name; since = 0;
@@ -257,60 +293,70 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     document.querySelectorAll('[data-a]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.a === name)));
   }
 
-  function poseHand(h, target, k) {
-    h.pos.lerp(target.p, k);
-    h.hand.position.copy(h.pos);
-    h.rot.set(lerp(h.rot.x, target.r.x, k), lerp(h.rot.y, target.r.y, k), lerp(h.rot.z, target.r.z, k));
-    h.hand.rotation.copy(h.rot);
+  function poseHand(h, target, dt) {
+    const P = [target.p.x, target.p.y, target.p.z], R = [target.r.x, target.r.y, target.r.z];
+    h.hand.position.set(h.sp[0].step(P[0], dt), h.sp[1].step(P[1], dt), h.sp[2].step(P[2], dt));
+    h.hand.rotation.set(h.sr[0].step(R[0], dt), h.sr[1].step(R[1], dt), h.sr[2].step(R[2], dt));
     h.fingers.forEach((f, i) => {
-      h.curl[i] = lerp(h.curl[i], target.curl[i], Math.min(1, k * 1.6));
-      f.a.rotation.x = h.curl[i]; f.b.rotation.x = h.curl[i] * 1.15;
+      const c = h.sc[i].step(target.curl[i], dt);
+      f.a.rotation.x = c; f.b.rotation.x = c * 1.2;
     });
-    h.thumbCurl = lerp(h.thumbCurl, target.thumb, k);
-    h.thumb.rotation.x = h.thumbCurl * 0.8; h.thumb.rotation.z = h.thumbCurl * 0.6 * h.side;
+    const tc = h.st.step(target.thumb, dt);
+    h.thumb.rotation.x = tc * 0.8; h.thumb.rotation.z = tc * 0.6 * h.side;
   }
 
   const clock = new THREE.Clock();
+  const tmp = new THREE.Vector3();
   let t = 0;
   function frame() {
     const dt = Math.min(0.05, clock.getDelta()) * (reduced ? 0.4 : 1);
     t += dt; since += dt;
-    if (auto && since > (current === 'repos' ? 3 : 3.6)) setAnim(ORDER[(ORDER.indexOf(current) + 1) % ORDER.length], false);
+    if (auto && since > (current === 'repos' ? 3 : 3.8)) setAnim(ORDER[(ORDER.indexOf(current) + 1) % ORDER.length], false);
     const P = POSES[current](t);
-    const k = Math.min(1, dt * 7);
+    const k = ease(8, dt);
 
-    // Tête : flotte, regarde vers le pointeur en plus de la pose
-    agent.position.y = Math.sin(t * 1.6) * 0.06 + (P.bounce || 0);
-    head.rotation.x = lerp(head.rotation.x, P.head.x - pointer.y * 0.15, k);
-    head.rotation.y = lerp(head.rotation.y, P.head.y + pointer.x * 0.3, k);
-    head.rotation.z = lerp(head.rotation.z, P.head.z, k);
-    poseHand(hands.L, P.L, k);
-    poseHand(hands.R, P.R, k);
+    // Tête : flotte, regarde vers le pointeur en plus de la pose (avec un léger retard naturel)
+    agent.position.y = Math.sin(t * 1.6) * 0.05 + bounceSpring.step(P.bounce || 0, dt);
+    head.rotation.set(
+      headSpring[0].step(P.head.x - pointer.y * 0.15, dt),
+      headSpring[1].step(P.head.y + pointer.x * 0.3, dt),
+      headSpring[2].step(P.head.z, dt));
+    skull.scale.y = 0.98 + Math.sin(t * 1.6) * 0.006;
+    poseHand(hands.L, P.L, dt);
+    poseHand(hands.R, P.R, dt);
 
     // Yeux : clignements et expressions
     nextBlink -= dt;
-    if (nextBlink <= 0) { blink = 0.16; nextBlink = 2 + Math.random() * 3; }
+    if (nextBlink <= 0) { blink = 0.14; nextBlink = 2 + Math.random() * 3.5; }
     blink = Math.max(0, blink - dt);
-    const open = blink > 0 ? 0.12 : 1;
+    const open = blink > 0 ? Math.max(0.1, Math.abs(blink / 0.07 - 1)) : 1;
     eyes.forEach(({ m, s }) => {
       let sx = 0.8, sy = 1.35 * open, rz = 0;
       if (P.mood === 'joie') { sy = 0.45; sx = 1.05; }
       if (P.mood === 'concentre') sy = 0.9 * open;
       if (P.mood === 'pense') { sy = 1.1 * open; m.position.y = lerp(m.position.y, 0.06, k); } else m.position.y = lerp(m.position.y, 0, k);
       if (P.mood === 'erreur') { sx = 1.0; sy = 0.4; rz = 0.6 * s; }
-      m.scale.x = lerp(m.scale.x, sx, k * 2); m.scale.y = lerp(m.scale.y, sy, Math.min(1, k * 3)); m.rotation.z = lerp(m.rotation.z, rz, k * 2);
-      m.position.x = lerp(m.position.x, pointer.x * 0.04, k);
+      m.scale.x = lerp(m.scale.x, sx, ease(14, dt)); m.scale.y = blink > 0 ? sy : lerp(m.scale.y, sy, ease(14, dt)); m.rotation.z = lerp(m.rotation.z, rz, ease(12, dt));
+      m.position.x = lerp(m.position.x, pointer.x * 0.04 + (P.mood === 'concentre' ? Math.sin(t * 2.3) * 0.015 : 0), k);
     });
     const hue = P.mood === 'erreur' ? 0xff6b6b : P.mood === 'joie' ? 0x7ef0a0 : 0x4fd6e3;
     M.eye.color.lerp(new THREE.Color(hue), k); M.eye.emissive.lerp(new THREE.Color(hue), k);
     mouth.scale.y = lerp(mouth.scale.y, P.mood === 'joie' ? 1.4 : P.mood === 'erreur' ? -0.8 : P.mood === 'pense' ? 0.25 : 1, k);
     M.accent.emissiveIntensity = 0.5 + (P.mood === 'pense' ? 0.9 + Math.sin(t * 8) * 0.6 : Math.sin(t * 2) * 0.2);
-    antenna.rotation.z = Math.sin(t * 2.2) * 0.08 + (P.mood === 'erreur' ? Math.sin(t * 30) * 0.15 : 0);
+    antenna.rotation.z = -head.rotation.z * 0.8 + Math.sin(t * 2.2) * 0.06 + (P.mood === 'erreur' ? Math.sin(t * 30) * 0.12 : 0);
+    antenna.rotation.x = -head.rotation.x * 0.5;
 
-    // Clavier
-    const ks = P.keyboard ? 1 : 0.001;
-    keyboard.scale.setScalar(lerp(keyboard.scale.x, ks, k));
-    if (P.keyboard) keys.forEach((kk, i) => { kk.position.y = 0.065 - (Math.sin(t * 13 + i * 2.3) > 0.85 ? 0.03 : 0); });
+    // Clavier : il apparaît en douceur ; une touche s'enfonce quand un bout de doigt la touche
+    keyboard.scale.setScalar(Math.max(0.001, kbSpring.step(P.keyboard ? 1 : 0.001, dt)));
+    if (keyboard.scale.x > 0.05) {
+      keyboard.updateMatrixWorld();
+      const tipsW = [];
+      for (const h of [hands.L, hands.R]) for (const f of h.fingers) { f.tip.getWorldPosition(tmp); tipsW.push(keyboard.worldToLocal(tmp.clone())); }
+      for (const kk of keys) {
+        const hit = tipsW.some(q => Math.abs(q.x - kk.position.x) < 0.11 && Math.abs(q.z - kk.position.z) < 0.13 && q.y < 0.2);
+        kk.position.y = lerp(kk.position.y, hit ? 0.035 : 0.065, ease(30, dt));
+      }
+    }
 
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
@@ -335,7 +381,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   resize();
   // Poses de départ sans saut
   const P0 = POSES.repos(0);
-  for (const s of ['L', 'R']) { hands[s].pos.copy(P0[s].p); hands[s].rot.copy(P0[s].r); }
+  for (const s of ['L', 'R']) {
+    const h = hands[s];
+    ['x', 'y', 'z'].forEach((a, i) => { h.sp[i].v = P0[s].p[a]; h.sr[i].v = P0[s].r[a]; });
+    P0[s].curl.forEach((c, i) => { h.sc[i].v = c; });
+  }
   window.__skin = { setAnim };
   frame();
 })();
