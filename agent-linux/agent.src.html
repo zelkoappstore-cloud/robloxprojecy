@@ -1,0 +1,472 @@
+<title>Petit agent Linux</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Un seul look sombre assumé : à gauche un bureau façon GNOME découpé en grille 12×8 (la « vue » de l'agent), à droite son carnet */
+:root {
+  --bg: #0b0d12;
+  --panel: #12161e;
+  --line: #242b38;
+  --text: #e6e9ef;
+  --dim: #8a93a6;
+  --accent: #ffb547;
+  --ok: #63d68a;
+  --bad: #ff6b6b;
+  --win: #1d2029;
+  --head: #262a35;
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); font-size: 14px; }
+#app {
+  display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; min-height: 100%; box-sizing: border-box;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (max-width: 960px) { #app { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Bureau ---------- */
+#desk {
+  position: relative; aspect-ratio: 3 / 2; width: 100%; max-height: calc(100vh - 32px); min-width: 0; align-self: start;
+  border-radius: 14px; overflow: hidden; user-select: none; border: 1px solid var(--line); container-type: inline-size;
+  background:
+    radial-gradient(60% 80% at 85% 20%, rgba(255, 181, 71, 0.18), transparent 60%),
+    radial-gradient(70% 90% at 10% 90%, rgba(80, 120, 255, 0.22), transparent 60%),
+    linear-gradient(160deg, #161b2b, #0e1220 60%, #0a0d17);
+}
+#desk::before { content: ""; position: absolute; right: 7%; bottom: 22%; width: 22%; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 0 0 28px rgba(255, 255, 255, 0.025), 0 0 0 56px rgba(255, 255, 255, 0.015); }
+.topbar { position: absolute; inset: 0 0 auto; height: 4.2%; min-height: 20px; background: rgba(5, 6, 9, 0.85); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px; font-size: clamp(10px, 1.3cqw, 13px); z-index: 50; }
+.topbar .act { font-weight: 600; }
+.topbar .clock { font-weight: 600; font-variant-numeric: tabular-nums; }
+.topbar .tray { justify-self: end; display: flex; gap: 10px; color: var(--dim); }
+.grid-overlay { position: absolute; inset: 0; z-index: 60; pointer-events: none; display: none;
+  background-image: linear-gradient(to right, rgba(255, 181, 71, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 181, 71, 0.25) 1px, transparent 1px);
+  background-size: calc(100% / 12) calc(100% / 8); }
+#desk.show-grid .grid-overlay { display: block; }
+.hover-cell { position: absolute; z-index: 59; border-radius: 8px; background: rgba(255, 181, 71, 0.12); outline: 1px dashed rgba(255, 181, 71, 0.5); pointer-events: none; transition: left 0.08s, top 0.08s; }
+
+.dock { position: absolute; z-index: 40; border-radius: 18px; background: rgba(20, 23, 31, 0.78); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); }
+.dicon { position: absolute; z-index: 41; display: grid; place-items: center; }
+.dicon .tile { width: 62%; aspect-ratio: 1; border-radius: 22%; display: grid; place-items: center; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35); position: relative; }
+.dicon svg { width: 58%; height: 58%; }
+.dicon.on .tile::after { content: ""; position: absolute; bottom: -9%; width: 10%; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
+.dicon .badge { position: absolute; top: 10%; right: 14%; background: var(--bad); color: #fff; font-size: 10px; font-weight: 600; border-radius: 999px; padding: 0 5px; }
+
+.win { position: absolute; background: var(--win); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.07); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55); overflow: hidden; display: flex; flex-direction: column; }
+.win.focus { border-color: rgba(255, 181, 71, 0.55); }
+.win .hb { height: clamp(22px, 3.4cqw, 34px); flex: none; background: var(--head); display: flex; align-items: center; justify-content: center; font-size: clamp(10px, 1.25cqw, 13px); font-weight: 600; color: var(--dim); position: relative; }
+.win.focus .hb { color: var(--text); }
+.win .wbody { flex: 1; min-height: 0; position: relative; }
+.wbtn { position: absolute; z-index: 1; display: grid; place-items: center; pointer-events: none; }
+.wbtn .x { width: clamp(16px, 2.2cqw, 22px); aspect-ratio: 1; border-radius: 50%; background: #3a3f4c; display: grid; place-items: center; color: var(--text); font-size: clamp(9px, 1.1cqw, 12px); }
+.wbtn .pill { font-size: clamp(9px, 1.15cqw, 12px); padding: 0.35em 0.8em; border-radius: 8px; background: #2f3542; color: var(--text); white-space: nowrap; }
+.wbtn .pill.blue { background: #3b6fd8; }
+.wbtn .pill.red { background: #a53c3c; }
+.term { position: absolute; inset: 0; background: #0d0f14; font-family: var(--mono); font-size: clamp(9px, 1.15cqw, 12.5px); line-height: 1.45; padding: 0.5em 0.8em; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+.term .err { color: var(--bad); }
+.term .ps { color: var(--ok); }
+.term .ps b { color: #7aa7ff; font-weight: 400; }
+.term .ps i { font-style: normal; color: var(--text); }
+.caret { display: inline-block; width: 0.55em; height: 1.05em; background: var(--text); vertical-align: -0.15em; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.path { position: absolute; left: 10px; top: 0; height: 100%; display: flex; align-items: center; font-family: var(--mono); font-size: clamp(9px, 1.05cqw, 11px); color: var(--dim); }
+.fitem { position: absolute; z-index: 1; display: grid; justify-items: center; align-content: center; gap: 3px; pointer-events: none; font-size: clamp(8px, 1cqw, 11px); text-align: center; padding: 2px; border-radius: 8px; }
+.fitem .ic { width: 42%; aspect-ratio: 1.25; }
+.fitem span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fitem.sel { background: rgba(59, 111, 216, 0.45); }
+.paper { position: absolute; inset: 0; background: #fbfaf6; color: #23262d; font-family: var(--mono); font-size: clamp(10px, 1.2cqw, 13px); padding: 0.7em 0.9em; }
+.edfoot { position: absolute; inset: 0; background: #ece9e1; display: flex; align-items: center; padding: 0 0.9em; gap: 8px; color: #444; font-size: clamp(9px, 1.05cqw, 11.5px); }
+.edfoot .namebox { background: #fff; border: 1px solid #3b6fd8; border-radius: 6px; padding: 0.2em 0.6em; font-family: var(--mono); min-width: 7em; color: #222; }
+
+#cursor { position: absolute; z-index: 70; width: 0; height: 0; pointer-events: none; transition: left 0.09s linear, top 0.09s linear; }
+#cursor svg { position: absolute; left: -2px; top: -2px; width: clamp(16px, 2.4cqw, 24px); height: auto; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+#cursor .ring { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; }
+#cursor.click .ring { animation: ring 0.3s ease-out; }
+@keyframes ring { from { opacity: 1; transform: scale(0.3); } to { opacity: 0; transform: scale(1.5); } }
+#bubble { position: absolute; z-index: 80; max-width: 44%; background: var(--accent); color: #1a1406; font-size: clamp(10px, 1.2cqw, 12.5px); font-weight: 500; padding: 0.4em 0.8em; border-radius: 10px; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+#bubble.show { opacity: 1; }
+#keycap { position: absolute; z-index: 80; right: 2%; bottom: 3%; font-family: var(--mono); font-size: clamp(10px, 1.3cqw, 13px); background: #f2f2f2; color: #111; border-radius: 6px; padding: 0.25em 0.7em; box-shadow: 0 3px 0 #9a9a9a; opacity: 0; transition: opacity 0.15s; }
+#keycap.show { opacity: 1; }
+
+/* ---------- Panneau ---------- */
+#side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+h1 { margin: 0; font-size: 20px; font-weight: 600; text-wrap: balance; }
+h1 span { color: var(--accent); }
+h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+h2 em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--accent); }
+p.note { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.5; }
+.io { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; color: var(--dim); }
+.io b { color: var(--text); font-weight: 500; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button, select { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--dim); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.primary { background: var(--accent); border-color: var(--accent); color: #1a1406; font-weight: 600; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
+.bar { height: 6px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.skills { display: grid; gap: 6px; }
+.skill { display: grid; grid-template-columns: minmax(0, 1fr) 56px 72px; gap: 8px; align-items: center; font-size: 12px; }
+.skill b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill span { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.skill .bar i { background: var(--ok); }
+#journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 360px; overflow-y: auto; font-size: 12px; line-height: 1.45; }
+#journal:empty::before { content: "Le journal se remplira quand tu lâcheras l’agent tout seul."; color: var(--dim); }
+#journal li { border-left: 3px solid var(--line); padding-left: 8px; }
+#journal li.ok { border-color: var(--ok); }
+#journal li.ko { border-color: var(--bad); }
+#journal li.sum { border-color: var(--accent); color: var(--accent); }
+#journal code { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { #cursor, .hover-cell { transition: none; } .caret { animation: none; } }
+</style>
+
+<div id="app">
+  <div id="desk" aria-label="Bureau Linux simulé">
+    <div class="topbar"><span class="act">Activités</span><span class="clock" id="clock">09:00</span><span class="tray"><span>FR</span><span>Wi-Fi</span><span>100 %</span></span></div>
+    <div id="layer"></div>
+    <div class="grid-overlay"></div>
+    <div class="hover-cell" id="hover"></div>
+    <div id="cursor"><svg viewBox="0 0 22 24"><path d="M2 1 L2 19 L7 14.5 L10.5 22 L13.8 20.5 L10.3 13 L17.5 13 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="ring"></div></div>
+    <div id="bubble"></div>
+    <div id="keycap"></div>
+  </div>
+
+  <div id="side">
+    <div class="card">
+      <h1>Petit agent <span>Linux</span></h1>
+      <p class="note">Il ne connaît rien au départ. Il n’a que ses « mains » et ses « yeux », et apprend par essais et erreurs (apprentissage par renforcement).</p>
+      <div class="io">
+        <b>Il voit</b><span>la case où est son curseur, ce qu’il y a dessous, les fenêtres ouvertes, ce qu’il a déjà tapé</span>
+        <b>Il agit</b><span>↑ ↓ ← → (curseur d’une case), clic, et un clavier de 13 touches-mots (ls, mkdir, cd, Entrée…)</span>
+      </div>
+      <label class="check"><input type="checkbox" id="gridToggle"> Montrer la grille que voit l’agent (12 × 8 cases)</label>
+    </div>
+
+    <div class="card">
+      <h2>1. Entraînement <em id="level">jamais entraîné</em></h2>
+      <div class="row">
+        <button class="primary" id="train">Entraîner 105 000 essais</button>
+        <button id="forget">Tout oublier</button>
+      </div>
+      <div class="bar" id="progress"><i></i></div>
+      <div class="skills" id="skills"></div>
+      <p class="note">+1 quand l’objectif est atteint, −0,01 par geste, −0,04 pour un geste inutile (cliquer dans le vide, taper sans fenêtre). Le bureau de départ change à chaque essai.</p>
+    </div>
+
+    <div class="card">
+      <h2>2. Regarder un essai</h2>
+      <div class="row">
+        <select id="taskSel" aria-label="Objectif à montrer"></select>
+        <button id="show">Montrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Le lâcher tout seul</h2>
+      <div class="row">
+        <button class="primary" id="free">Lâcher l’agent</button>
+        <button data-sp="1" aria-pressed="false">×1</button>
+        <button data-sp="3" aria-pressed="true">×3</button>
+        <button data-sp="10" aria-pressed="false">×10</button>
+      </div>
+      <p class="note">Aucun objectif donné : il choisit lui-même quoi faire (sa curiosité préfère ce qu’il n’a pas encore fait), se débrouille avec ce qu’il a appris et continue d’apprendre de ses erreurs.</p>
+      <ol id="journal"></ol>
+    </div>
+  </div>
+</div>
+
+<script>
+/*BRAIN*/
+</script>
+<script>
+(() => {
+  const { HOME, COLS, ROWS, ACTIONS, LAYOUT, DOCK, Env, TASKS, observe, Brain, pick } = window.AgentLinux;
+  const $ = id => document.getElementById(id);
+  const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
+  let brain = new Brain();
+
+  // ---------- Rendu du bureau (chaque élément est posé sur la grille de l'agent) ----------
+  const pct = (x, y, w = 1, h = 1) => `left:${x / COLS * 100}%;top:${y / ROWS * 100}%;width:${w / COLS * 100}%;height:${h / ROWS * 100}%`;
+  const ICON = {
+    terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="#63d68a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5-5 5M12 17h7"/></svg>',
+    fichiers: '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" fill="#fff"/></svg>',
+    editeur: '<svg viewBox="0 0 24 24" fill="none" stroke="#3b6fd8" stroke-width="2" stroke-linecap="round"><path d="M6 6h12M6 10h12M6 14h8M6 18h5"/></svg>',
+    corbeille: '<svg viewBox="0 0 24 24" fill="none" stroke="#e6e9ef" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
+  };
+  const TILE = { terminal: '#1a1d24', fichiers: '#3b6fd8', editeur: '#f3f1ea', corbeille: '#4a505e' };
+  const FOLDER = '<svg class="ic" viewBox="0 0 30 24"><path d="M1 4a2 2 0 0 1 2-2h8l3 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#e8b84a"/><path d="M1 8h28v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="#f5c95c"/></svg>';
+  const FILE = '<svg class="ic" viewBox="0 0 30 24"><path d="M9 1h9l5 5v16a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" fill="#dfe4ee"/><path d="M18 1v5h5" fill="#b9c0cf"/><path d="M11 12h9M11 15h9M11 18h6" stroke="#8a93a6" stroke-width="1.2"/></svg>';
+  const IMG = '<svg class="ic" viewBox="0 0 30 24"><rect x="5" y="2" width="20" height="20" rx="2" fill="#7aa7ff"/><circle cx="11" cy="8" r="2.5" fill="#fff"/><path d="M5 19l6-6 4 4 3-3 7 7H5z" fill="#2d4f9e"/></svg>';
+  const word = (k, p) => (k === '‹dossier›' ? p.dir : k === '‹fichier›' ? p.file : k === '‹texte›' ? p.text : k) ?? k;
+
+  function el(cls, style, html) { const d = document.createElement('div'); d.className = cls; if (style) d.style.cssText = style; if (html != null) d.innerHTML = html; return d; }
+
+  function render(e, p = {}) {
+    const L = $('layer');
+    L.textContent = '';
+    // Dock
+    L.append(el('dock', pct(4, 7, 4, 1) + ';margin:0.6% 0;height:' + (100 / ROWS - 1.2) + '%'));
+    for (const [x, app] of Object.entries(DOCK)) {
+      const d = el('dicon' + (e.open.includes(app) ? ' on' : ''), pct(+x, 7), `<div class="tile" style="background:${TILE[app]}">${ICON[app]}</div>`);
+      if (app === 'corbeille' && e.trash.length) d.append(el('badge', '', String(e.trash.length)));
+      d.title = app;
+      L.append(d);
+    }
+    // Fenêtres, de l'arrière vers l'avant
+    const order = [...e.open].sort((a, b) => (a === e.focus) - (b === e.focus));
+    order.forEach((app, i) => {
+      const W = LAYOUT[app], z = 10 + i * 5;
+      const win = el('win' + (e.focus === app ? ' focus' : ''), pct(W.x0, W.y0, W.x1 - W.x0 + 1, W.y1 - W.y0 + 1) + `;z-index:${z}`);
+      const title = app === 'terminal' ? `agent@linux: ${e.cwd.replace(HOME, '~')}` : app === 'fichiers' ? 'Fichiers' : `${e.ed.name || 'Sans titre'} — Éditeur de texte`;
+      const hb = el('hb', '', ''); hb.textContent = title;
+      win.append(hb);
+      const body = el('wbody');
+      win.append(body);
+      L.append(win);
+      const [cx, cy] = W.close;
+      L.append(el('wbtn', pct(cx, cy) + `;z-index:${z + 1};height:auto;aspect-ratio:auto;top:calc(${cy / ROWS * 100}% + 3px)`, '<div class="x">✕</div>'));
+      if (app === 'terminal') {
+        const t = el('term');
+        for (const { line, err } of e.term.slice(-12)) { const d = document.createElement('div'); d.textContent = line; if (err) d.className = 'err'; t.append(d); }
+        const ps = el('ps', '', '<b></b>$ <i></i><span class="caret"></span>');
+        ps.querySelector('b').textContent = 'agent@linux:' + e.cwd.replace(HOME, '~') + ' ';
+        ps.querySelector('i').textContent = e.buf.map(k => word(k, p)).join(' ');
+        t.append(ps);
+        body.append(t);
+      }
+      if (app === 'fichiers') {
+        const path = el('path'); path.textContent = e.fm.replace(HOME, '~ (dossier personnel)');
+        hb.append(path);
+        L.append(el('wbtn', pct(...W.up) + `;z-index:${z + 1}`, '<div class="pill">↑ Parent</div>'));
+        L.append(el('wbtn', pct(...W.bin) + `;z-index:${z + 1}`, '<div class="pill red">Corbeille</div>'));
+        e.list(e.fm).slice(0, W.items.length).forEach((name, k) => {
+          const [ix, iy] = W.items[k], dir = e.isDir(e.fm + '/' + name);
+          const it = el('fitem' + (e.sel === name ? ' sel' : ''), pct(ix, iy) + `;z-index:${z + 1}`, (dir ? FOLDER : name.endsWith('.png') ? IMG : FILE) + '<span></span>');
+          it.querySelector('span').textContent = name;
+          L.append(it);
+        });
+      }
+      if (app === 'editeur') {
+        const paper = el('paper'); paper.textContent = e.ed.text;
+        body.append(paper);
+        const foot = el('edfoot', pct(W.x0, W.y1, W.x1 - W.x0 + 1, 1) + `;position:absolute;z-index:${z + 1};border-radius:0 0 12px 12px;box-sizing:border-box;border:1px solid ${e.focus === 'editeur' ? 'rgba(255,181,71,0.55)' : 'rgba(255,255,255,0.07)'};border-top:0`);
+        if (e.ed.saving) { foot.innerHTML = 'Enregistrer sous : <span class="namebox"></span>'; foot.querySelector('.namebox').textContent = e.ed.nameBuf || ''; }
+        else foot.textContent = e.ed.name ? 'Enregistré dans ~/' + e.ed.name : 'Non enregistré';
+        L.append(foot);
+        L.append(el('wbtn', pct(...W.save) + `;z-index:${z + 2}`, '<div class="pill blue">Enregistrer</div>'));
+      }
+    });
+    placeCursor(e);
+  }
+
+  function placeCursor(e) {
+    $('cursor').style.left = ((e.cx + 0.5) / COLS * 100) + '%';
+    $('cursor').style.top = ((e.cy + 0.5) / ROWS * 100) + '%';
+    $('hover').style.cssText = pct(e.cx, e.cy);
+  }
+
+  // ---------- Animation d'un geste ----------
+  let speed = 3;
+  const sleep = ms => new Promise(r => setTimeout(r, ms / speed));
+  function bubble(text, ms = 1800) {
+    const b = $('bubble');
+    b.textContent = text;
+    b.style.left = '3%'; b.style.top = '6%';
+    b.classList.add('show');
+    clearTimeout(bubble.t);
+    bubble.t = setTimeout(() => b.classList.remove('show'), ms / speed);
+  }
+  function keycap(text) {
+    const k = $('keycap');
+    k.textContent = text;
+    k.classList.add('show');
+    clearTimeout(keycap.t);
+    keycap.t = setTimeout(() => k.classList.remove('show'), 500 / speed);
+  }
+  function describe(e, a, p) {
+    const act = ACTIONS[a];
+    if (act.length === 1) return { move: true };
+    if (act === 'clic') {
+      const h = e.hit(e.cx, e.cy);
+      const what = h.kind === 'dock' ? `l’icône ${h.app}` : h.kind === 'close' ? `fermer ${h.app}` : h.kind === 'item' ? h.name : h.kind === 'bin' ? 'Corbeille' : h.kind === 'up' ? 'Parent' : h.kind === 'save' ? 'Enregistrer' : h.kind === 'win' ? `la fenêtre ${h.app}` : 'le vide';
+      return { text: 'clic sur ' + what };
+    }
+    return { text: '⌨ ' + word(act.slice(7), p) };
+  }
+
+  async function gesture(e, a, p, animate) {
+    const d = describe(e, a, p);
+    const useful = e.step(a, p);
+    if (animate) {
+      const act = ACTIONS[a];
+      if (act === 'clic') { const c = $('cursor'); c.classList.remove('click'); void c.offsetWidth; c.classList.add('click'); }
+      else if (!d.move) keycap(word(act.slice(7), p));
+      render(e, p);
+      await sleep(d.move ? 110 : 260);
+    }
+    return { useful, d };
+  }
+
+  // Joue un objectif avec ce que l'agent a appris (presque sans hasard)
+  async function perform(e, task, p, animate = true, maxSteps = 60) {
+    const log = [];
+    let moves = 0;
+    const flush = () => { if (moves) { log.push(`curseur ×${moves}`); moves = 0; } };
+    for (let n = 0; n < maxSteps; n++) {
+      const s = observe(e, task, p);
+      const a = brain.choose(s, 0.05);
+      const { useful, d } = await gesture(e, a, p, animate);
+      if (d.move) moves++; else { flush(); log.push((useful ? '' : '✗ ') + d.text); }
+      // Il continue d'apprendre pendant qu'il est seul : un geste inutile perd de la valeur, il ne le répète pas
+      const ok = task.done(e, p);
+      brain.learn(s, a, ok ? 1 : (useful ? -0.01 : -0.04) + 0.97 * brain.maxq(observe(e, task, p)));
+      if (ok) { flush(); return { ok: true, log, n: n + 1 }; }
+    }
+    flush();
+    return { ok: false, log, n: maxSteps };
+  }
+
+  let busy = false;
+  const lock = on => { busy = on; for (const id of ['train', 'forget', 'show', 'free']) $(id).disabled = on; };
+
+  // ---------- Entraînement ----------
+  function renderSkills() {
+    $('skills').textContent = '';
+    let total = 0;
+    for (const t of TASKS) {
+      const st = brain.stats[t.id];
+      const rate = st.wins.length ? st.wins.filter(Boolean).length / st.wins.length : 0;
+      const okSteps = st.steps.filter((_, i) => st.wins[i]);
+      const avg = okSteps.length ? Math.round(okSteps.reduce((a, b) => a + b, 0) / okSteps.length) : '–';
+      total += rate;
+      const row = el('skill', '', `<b></b><div class="bar"><i style="width:${Math.round(rate * 100)}%"></i></div><span>${avg} gestes</span>`);
+      row.querySelector('b').textContent = t.label;
+      $('skills').append(row);
+    }
+    const m = total / TASKS.length;
+    $('level').textContent = brain.trained === 0 ? 'jamais entraîné' : `${m > 0.85 ? 'à l’aise' : m > 0.5 ? 'apprenti' : 'débutant'} · ${brain.trained.toLocaleString('fr-FR')} essais`;
+  }
+
+  $('train').addEventListener('click', () => {
+    if (busy) return;
+    lock(true);
+    const total = 105000, chunk = 1500;
+    let done = 0;
+    bubble('Je m’entraîne…', 3000);
+    (function next() {
+      brain.train(chunk); done += chunk;
+      $('progress').firstChild.style.width = (done / total * 100) + '%';
+      renderSkills();
+      if (done < total) setTimeout(next, 0);
+      else { lock(false); bubble('Entraînement terminé. Regarde-moi faire !'); }
+    })();
+  });
+  $('forget').addEventListener('click', () => {
+    brain = new Brain();
+    $('progress').firstChild.style.width = '0';
+    renderSkills();
+  });
+
+  for (const t of TASKS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; $('taskSel').append(o); }
+  $('show').addEventListener('click', async () => {
+    if (busy) return;
+    lock(true);
+    const task = T[$('taskSel').value];
+    const e = new Env().reset(true);
+    render(e, task.p);
+    bubble('Objectif : ' + task.label.toLowerCase());
+    await sleep(900);
+    const r = await perform(e, task, task.p, true);
+    bubble(r.ok ? `Réussi en ${r.n} gestes !` : 'Raté… il faut encore m’entraîner.');
+    lock(false);
+  });
+
+  // ---------- Mode libre ----------
+  const DIRS = ['musique', 'jeux', 'secret', 'idees', 'voyages', 'robots', 'archives'];
+  const FILES = ['memo.txt', 'plan.txt', 'poeme.txt', 'todo.txt', 'reve.txt', 'journal.txt'];
+  function chooseGoal(e, mem) {
+    const home = e.list(HOME);
+    const txt = home.filter(n => n.endsWith('.txt') && !mem.read.has(n));
+    const newDir = DIRS.filter(d => !home.includes(d));
+    const newFile = FILES.filter(f => !home.includes(f) && !mem.made.has(f));
+    const mine = [...mem.dirs].filter(d => e.isDir(HOME + '/' + d));
+    const junk = home.filter(n => !e.isDir(HOME + '/' + n) && (n.endsWith('.png') || (mem.made.has(n) && mem.read.has(n))));
+    const c = [{ t: 'ls', p: {}, why: 'Je regarde ce qu’il y a dans mon dossier.' }];
+    if (txt.length) { const f = pick(txt); c.push({ t: 'cat', p: { file: f }, why: `Je suis curieux : que contient ${f} ?` }); }
+    if (newDir.length) { const d = pick(newDir); c.push({ t: 'mkdir', p: { dir: d }, why: `Je me fais un dossier « ${d} ».` }); }
+    if (mine.length && newFile.length) { const d = pick(mine), f = pick(newFile); c.push({ t: 'touch', p: { dir: d, file: f }, why: `Je range un fichier ${f} dans mon dossier ${d}.` }); }
+    if (newFile.length) { const f = pick(newFile); c.push({ t: 'write', p: { file: f, text: compose(e, mem) }, why: `J’écris quelque chose dans ${f}.` }); }
+    if (junk.length) { const f = pick(junk); c.push({ t: 'trash', p: { file: f }, why: `${f} ne me sert plus, je le jette.` }); }
+    for (const g of c) g.score = 1 / (1 + (mem.count[g.t] || 0)) + Math.random() * 0.6;
+    return c.sort((a, b) => b.score - a.score)[0];
+  }
+  function compose(e, mem) {
+    const ideas = [`J'ai ${e.list(HOME).length} choses dans mon dossier.`, 'Bonjour, je suis un petit agent.', 'Aujourd hui j apprends Linux.'];
+    if (mem.seen.notes) ideas.push('A acheter : ' + mem.seen.notes.split(':')[1].trim());
+    if (mem.dirs.size) ideas.push('Mes dossiers : ' + [...mem.dirs].join(', '));
+    return pick(ideas);
+  }
+
+  $('free').addEventListener('click', async () => {
+    if (busy) return;
+    lock(true);
+    $('journal').textContent = '';
+    const e = new Env().reset(false);
+    render(e);
+    if (!brain.trained) bubble('Je n’ai jamais été entraîné… je vais essayer quand même.');
+    const mem = { read: new Set(), made: new Set(), dirs: new Set(), count: {}, seen: {} };
+    let wins = 0, gestures = 0;
+    for (let i = 0; i < 10; i++) {
+      const g = chooseGoal(e, mem);
+      const min = 9 * 60 + i * 4, clock = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+      $('clock').textContent = clock;
+      bubble(g.why, 2200);
+      await sleep(800);
+      const r = await perform(e, T[g.t], g.p, true);
+      gestures += r.n;
+      mem.count[g.t] = (mem.count[g.t] || 0) + 1;
+      if (r.ok) {
+        wins++;
+        if (g.t === 'cat') { mem.read.add(g.p.file); mem.seen[g.p.file.replace('.txt', '')] = e.fs.get(HOME + '/' + g.p.file)?.c; }
+        if (g.t === 'mkdir') mem.dirs.add(g.p.dir);
+        if (g.t === 'write' || g.t === 'touch') mem.made.add(g.p.file);
+      }
+      const item = document.createElement('li');
+      item.className = r.ok ? 'ok' : 'ko';
+      item.innerHTML = '<b></b> <span></span><br><code></code>';
+      item.querySelector('b').textContent = clock;
+      item.querySelector('span').textContent = g.why + (r.ok ? ` Réussi en ${r.n} geste${r.n > 1 ? 's' : ''}.` : ' Je n’y arrive pas, j’abandonne.');
+      item.querySelector('code').textContent = r.log.join(' → ');
+      $('journal').append(item);
+      $('journal').scrollTop = $('journal').scrollHeight;
+    }
+    const sum = document.createElement('li');
+    sum.className = 'sum';
+    sum.textContent = `Bilan : 10 objectifs choisis tout seul, ${wins} réussis, ${gestures} gestes. Dossier final : ${e.list(HOME).join(', ')}. Corbeille : ${e.trash.map(t => t.name).join(', ') || 'vide'}.`;
+    $('journal').append(sum);
+    $('journal').scrollTop = $('journal').scrollHeight;
+    lock(false);
+  });
+
+  document.querySelectorAll('[data-sp]').forEach(b => b.addEventListener('click', () => {
+    speed = +b.dataset.sp;
+    document.querySelectorAll('[data-sp]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  $('gridToggle').addEventListener('change', ev => $('desk').classList.toggle('show-grid', ev.target.checked));
+
+  // État de départ : un bureau avec le gestionnaire de fichiers ouvert
+  const start = new Env().reset(false);
+  start.open = ['fichiers', 'terminal']; start.focus = 'terminal';
+  start.term.push({ line: 'Bienvenue sur le bureau de l’agent.' });
+  render(start);
+  renderSkills();
+})();
+</script>
