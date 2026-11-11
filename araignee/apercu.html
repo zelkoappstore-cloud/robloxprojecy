@@ -76,6 +76,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 .answer.found #ans { color: var(--ok); }
 #src { color: var(--ink); font-size: 12px; }
 .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.think { margin: 0; color: var(--box); font-size: 14px; line-height: 1.45; min-height: 2.9em; }
 .note { color: var(--ink-dim); font-size: 12px; line-height: 1.5; margin: 0; }
 
 @media (max-width: 760px) {
@@ -122,6 +123,11 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     </div>
 
     <div class="group">
+      <span class="label">Elle pense</span>
+      <p class="think" id="think">Je regarde autour de moi.</p>
+    </div>
+
+    <div class="group">
       <span class="label">Entraînement</span>
       <div class="stats">
         <div><span class="label">Essai</span><b id="ep">0</b></div>
@@ -140,7 +146,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
         <button type="button" data-s="20" aria-pressed="false">×20</button>
         <button type="button" id="reset">Tout oublier</button>
       </div>
-      <p class="note">Chaque essai, elle part du haut. Quand elle trouve, les mots du chemin gagnent de la valeur (en cyan). Elle apprend à aller droit au but.</p>
+      <p class="note">Son cerveau : elle lit les mots autour d’elle (flair), regarde un coup plus loin, retient les chemins qui marchent (en cyan), se souvient où était l’info et aime visiter des mots nouveaux. Elle comprend aussi les fautes de frappe et quelques synonymes (cash, dette, loyer…).</p>
     </div>
   </aside>
 </div>
@@ -174,7 +180,31 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       node.replaceWith(frag);
     }
   });
-  const words = [...document.querySelectorAll('.w')].map((el, i) => ({ el, i, text: el.textContent, n: norm(el.textContent), x: 0, y: 0, vis: false }));
+  const words = [...document.querySelectorAll('.w')].map((el, i) => ({ el, i, text: el.textContent, n: norm(el.textContent), num: /\d/.test(el.textContent), x: 0, y: 0, vis: false }));
+
+  // Groupe de sens de chaque mot : une phrase, ou une ligne du tableau
+  {
+    let g = 0, box = null;
+    for (const w of words) {
+      const tr = w.el.closest('tr'), b = tr || w.el.closest('p');
+      if (b !== box) { g++; box = b; }
+      w.g = g;
+      if (!tr && /[.!?]$/.test(w.text)) g++;
+    }
+  }
+
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  const fuzzy = (c, n) => c.length >= 3 && (n.includes(c) || (c.length >= 5 && lev(c, n) <= (c.length >= 8 ? 2 : 1)));
+  const SYNONYMS = { cash: 'tresorerie', argent: 'tresorerie', liquidites: 'tresorerie', dette: 'emprunt', pret: 'emprunt', credit: 'emprunt', loyer: 'locatifs', loyers: 'locatifs', croissance: 'progresse', hausse: 'progresse', depenses: 'charges', couts: 'charges', bourse: 'cotees', contrat: 'contrats' };
 
   const PRESETS = [
     { label: "Croissance du chiffre d'affaires", clues: ['chiffre', 'affaires', 'progresse'], id: 'a-croiss', text: '+14 %', src: 'Premier semestre 2026' },
@@ -184,12 +214,16 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   ];
   const memory = new Map();
 
-  function makeQuery(key, answerIdx, clues, extract) {
+  // P = son flair : ce qu'elle devine en lisant (mot-indice, phrase qui en parle, nombre dans cette phrase)
+  function makeQuery(key, answerIdx, clues, extract, numeric = false) {
     if (memory.has(key)) return memory.get(key);
+    const ans = new Set(answerIdx);
+    const clue = Uint8Array.from(words, w => !ans.has(w.i) && clues.some(c => fuzzy(c, w.n)) ? 1 : 0);
+    const hot = new Set(words.filter(w => clue[w.i] || (!clues.length && ans.has(w.i))).map(w => w.g));
     const q = {
-      key, answer: new Set(answerIdx), extract, ep: 0, hist: [], best: Infinity,
-      V: new Float32Array(words.length),
-      clue: Uint8Array.from(words, w => clues.some(c => c.length >= 3 && w.n.includes(c)) && !answerIdx.includes(w.i) ? 1 : 0)
+      key, answer: ans, extract, ep: 0, wins: 0, mem: null, hist: [], best: Infinity,
+      V: new Float32Array(words.length), N: new Uint16Array(words.length), clue,
+      P: Float32Array.from(words, w => !clues.length && ans.has(w.i) ? 1 : clue[w.i] ? 0.6 : hot.has(w.g) ? 0.3 + (numeric && w.num ? 0.3 : 0) : 0)
     };
     memory.set(key, q);
     return q;
@@ -280,7 +314,23 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   }
 
   // --- Apprentissage : valeur de chaque mot pour la recherche en cours ---
-  const exploration = () => Math.max(0.05, 0.7 * Math.pow(0.8, Q.ep));
+  const exploration = () => Math.max(0.03, 0.3 * Math.pow(0.7, Q.wins));
+
+  function think(w, why) {
+    let t;
+    if (why === 'explore') t = 'J’explore au hasard pour découvrir.';
+    else {
+      const top = Object.entries(why).sort((a, b) => b[1] - a[1])[0][0];
+      t = {
+        read: `Je lis « ${w.text} » : l’info doit être tout près.`,
+        path: 'Je suis un chemin qui a déjà marché.',
+        ahead: 'Je vois des mots utiles plus loin, j’y vais.',
+        map: 'Je me souviens où était l’info.',
+        cur: 'Je vais voir un mot que je ne connais pas encore.'
+      }[top];
+    }
+    if ($('think').textContent !== t) $('think').textContent = t;
+  }
 
   function chooseNext() {
     let R = Math.max(110, Math.min(W, H) * 0.22), cand = [];
@@ -289,12 +339,26 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       R *= 1.5;
     }
     if (!cand.length) return fail();
-    let pick;
-    if (Math.random() < exploration()) pick = cand[Math.random() * cand.length | 0];
+    const look = R / 1.5, diag = Math.hypot(W, H);
+    const memW = Q.mem != null ? words[Q.mem] : null, conf = Math.min(1, Q.wins / 2);
+    let pick, why;
+    if (Math.random() < exploration()) { pick = cand[Math.random() * cand.length | 0]; why = 'explore'; }
     else {
       let m = -Infinity;
-      for (const w of cand) { const v = Q.V[w.i] + Math.random() * 1e-3; if (v > m) { m = v; pick = w; } }
+      for (const w of cand) {
+        let ahead = 0;
+        for (const o of words) if (o.vis && o !== w && dist(o, w) < look) ahead = Math.max(ahead, Q.V[o.i] + Q.P[o.i]);
+        const parts = {
+          read: Q.P[w.i], path: Q.V[w.i], ahead: 0.5 * ahead,
+          map: memW ? conf * 0.8 * (1 - dist(w, memW) / diag) : 0,
+          cur: 0.12 / Math.sqrt(1 + Q.N[w.i])
+        };
+        const s = parts.read + parts.path + parts.ahead + parts.map + parts.cur + Math.random() * 1e-3;
+        if (s > m) { m = s; pick = w; why = parts; }
+      }
     }
+    think(pick, why);
+    Q.N[pick.i]++;
     S.target = pick;
     recent.push(pick.i); if (recent.length > 4) recent.shift();
     path.push(pick.i);
@@ -323,7 +387,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     wait = ok ? 2.2 : 0.5;
     Q.ep++;
     Q.hist.push({ steps, ok });
-    if (ok) Q.best = Math.min(Q.best, steps);
+    if (ok) { Q.best = Math.min(Q.best, steps); Q.wins++; }
     learn();
     renderStats();
   }
@@ -353,6 +417,8 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 
   function found(w) {
     if (path[path.length - 1] !== w.i) path.push(w.i);
+    Q.mem = w.i;
+    $('think').textContent = 'Trouvé ! Je pose ma patte dessus.';
     Q.answer.forEach(i => words[i].el.classList.add('ans'));
     const res = Q.extract(w);
     $('ans').textContent = res.text;
@@ -543,15 +609,15 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     b.type = 'button'; b.textContent = p.label; b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => {
       const idx = [...$(p.id).querySelectorAll('.w')].map(el => words.find(w => w.el === el).i);
-      setQuery(makeQuery(p.label, idx, p.clues, () => ({ text: p.text, src: p.src })), b);
+      setQuery(makeQuery(p.label, idx, p.clues, () => ({ text: p.text, src: p.src }), true), b);
     });
     $('presets').append(b);
   });
 
   $('qf').addEventListener('submit', e => {
     e.preventDefault();
-    const term = norm($('q').value);
-    const idx = term.length >= 3 ? words.filter(w => w.n.includes(term)).map(w => w.i) : [];
+    const raw = norm($('q').value), term = SYNONYMS[raw] || raw;
+    const idx = term.length >= 3 ? words.filter(w => fuzzy(term, w.n)).map(w => w.i) : [];
     if (!idx.length) {
       $('ans').textContent = 'Introuvable';
       $('src').textContent = term.length < 3 ? 'Tape au moins 3 lettres.' : 'Ce mot n’est pas dans le résumé. Essaie « bail » ou « emprunt ».';
@@ -570,7 +636,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 
   $('reset').addEventListener('click', () => {
     if (!Q) return;
-    Q.V.fill(0); Q.ep = 0; Q.hist = []; Q.best = Infinity;
+    Q.V.fill(0); Q.N.fill(0); Q.ep = 0; Q.wins = 0; Q.mem = null; Q.hist = []; Q.best = Infinity;
     paintHeat(); renderStats(); startEpisode();
   });
 
