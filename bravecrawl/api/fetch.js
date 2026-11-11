@@ -2,7 +2,7 @@
 const dns = require('dns').promises;
 const net = require('net');
 
-const AGENT = 'BraveCrawl/1.0 (+https://brave-crawl.vercel.app)';
+const AGENT = 'BraveCrawl/1.0 (+https://bravecrawl.vercel.app)';
 const MAX_BYTES = 2_000_000;
 const TYPES = /text\/html|application\/xhtml\+xml|text\/plain|application\/json|application\/ld\+json/i;
 
