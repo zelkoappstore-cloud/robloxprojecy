@@ -273,7 +273,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
 
   function placeLegs() {
     document.querySelectorAll('.w.grab, .w.seen, .w.hit').forEach(el => el.classList.remove('grab', 'seen', 'hit'));
-    for (const leg of legs) { leg.word = null; leg.to = footTarget(leg, legFrame(leg)); leg.t = 1; plant(leg); }
+    for (const leg of legs) { leg.word = null; leg.pinned = false; leg.to = footTarget(leg, legFrame(leg)); leg.t = 1; plant(leg); }
   }
 
   // --- Apprentissage : valeur de chaque mot pour la recherche en cours ---
@@ -317,7 +317,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
   function endEpisode(ok) {
     state = 'done';
     S.target = null;
-    wait = ok ? 1 : 0.5;
+    wait = ok ? 1.4 : 0.5;
     Q.ep++;
     Q.hist.push({ steps, ok });
     if (ok) Q.best = Math.min(Q.best, steps);
@@ -325,8 +325,22 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
     renderStats();
   }
 
+  function pinLegOn(w) {
+    let leg = legs.find(l => l.word === w);
+    if (!leg) {
+      let bestD = Infinity;
+      for (const l of legs) { const dd = dist(legFrame(l).coxaEnd, w); if (dd < bestD) { bestD = dd; leg = l; } }
+      lift(leg);
+      leg.from = { ...leg.foot };
+      leg.to = { x: w.x, y: w.y, word: w };
+      leg.t = 0;
+    }
+    leg.pinned = true;
+  }
+
   function found(w) {
     if (path[path.length - 1] !== w.i) path.push(w.i);
+    pinLegOn(w);
     Q.answer.forEach(i => words[i].el.classList.add('ans'));
     const res = Q.extract(w);
     $('ans').textContent = res.text;
@@ -413,6 +427,7 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
         if (leg.t === 1) plant(leg);
         continue;
       }
+      if (leg.pinned) continue;
       const tooFar = dist(leg.foot, f.coxaEnd) > f.d.femur + f.d.tibia - 2 * u;
       if (dist(leg.foot, f.home) < 38 * u && !tooFar) continue;
       if (legs.some(l => l.t < 1 && l.group !== leg.group) && !tooFar) continue;
@@ -460,13 +475,12 @@ button[aria-pressed="true"] { border-color: var(--hit); color: var(--hit); }
       ctx.setLineDash([]);
     }
 
-    const lw = Math.max(1.8, 2.2 * u), jr = Math.max(1.6, 1.8 * u);
+    const lw = Math.max(1, 1.2 * u), jr = Math.max(1.3, 1.4 * u);
     ctx.lineJoin = 'round';
     for (const leg of legs) {
       const f = legFrame(leg);
       const { k, foot } = knee(f.coxaEnd, leg.foot, d.femur, d.tibia);
       const path = () => { ctx.beginPath(); ctx.moveTo(f.hip.x, f.hip.y); ctx.lineTo(f.coxaEnd.x, f.coxaEnd.y); ctx.lineTo(k.x, k.y); ctx.lineTo(foot.x, foot.y); };
-      path(); ctx.strokeStyle = C.edge; ctx.lineWidth = lw + 2; ctx.stroke();
       path(); ctx.strokeStyle = C.leg; ctx.lineWidth = lw; ctx.stroke();
       dot(f.coxaEnd, jr, C.joint);
       dot(k, jr, C.joint);
