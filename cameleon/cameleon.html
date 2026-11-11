@@ -1,0 +1,390 @@
+<title>Caméléon glouton</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600&display=swap">
+<style>
+/* Une seule ambiance assumée (jungle de nuit) : barre de commandes en haut, texte au milieu, caméléon sur sa branche en bas */
+:root {
+  --night: #0e1a14;
+  --leaf: #17291f;
+  --cream: #ece6d3;
+  --dim: #8a9a8c;
+  --tongue: #ff6b95;
+  --amber: #f2b84b;
+  --display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--night); color: var(--cream); font-family: var(--body); overflow: hidden; }
+#app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+header {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--leaf); border-bottom: 1px solid rgba(236, 230, 211, 0.08);
+}
+h1 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: 0.01em; }
+h1 span { color: var(--tongue); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+form { display: flex; gap: 6px; }
+input, button { font: inherit; font-size: 14px; color: var(--cream); background: var(--night); border: 1px solid rgba(236, 230, 211, 0.18); border-radius: 999px; }
+input { padding: 7px 14px; width: 170px; min-width: 0; }
+button { padding: 7px 14px; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+button:hover { border-color: var(--cream); }
+button:active { transform: scale(0.96); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.go { background: var(--tongue); border-color: var(--tongue); color: var(--night); font-weight: 600; }
+
+#stage { position: relative; overflow: hidden; min-height: 0; }
+#text {
+  position: absolute; inset: 0; overflow-y: auto; max-width: 760px; margin: 0 auto;
+  padding-block: 22px 220px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: clamp(16px, 2.1vw, 21px); line-height: 1.9;
+}
+#text p { margin: 0 0 0.9em; }
+.w { cursor: pointer; border-radius: 6px; padding: 0 2px; transition: background-color 0.15s, color 0.15s, opacity 0.3s; }
+.w:hover { background: rgba(255, 107, 149, 0.18); }
+.w.aim { background: rgba(242, 184, 75, 0.3); color: #fff; }
+.w.eaten { opacity: 0; pointer-events: none; }
+.w.back { animation: spit 0.5s ease-out; }
+@keyframes spit { from { transform: scale(1.6); color: var(--tongue); } to { transform: scale(1); } }
+.w { display: inline-block; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.prey { position: absolute; left: 0; top: 0; pointer-events: none; font-weight: 600; color: #fff; background: var(--tongue); padding: 0 6px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -50%); }
+#bubble {
+  position: absolute; pointer-events: none; font-family: var(--display); font-weight: 600; font-size: 18px;
+  background: var(--cream); color: var(--night); padding: 4px 12px; border-radius: 14px; opacity: 0;
+  transition: opacity 0.2s, transform 0.2s; transform: translateY(6px);
+}
+#bubble.show { opacity: 1; transform: translateY(0); }
+#belly {
+  position: absolute; width: min(300px, calc(100% - 32px));
+  right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  background: rgba(23, 41, 31, 0.92); border: 1px solid rgba(236, 230, 211, 0.12); border-radius: 16px;
+  padding: 12px 14px; display: grid; gap: 8px;
+}
+#belly h2 { margin: 0; font-family: var(--display); font-size: 15px; font-weight: 500; display: flex; justify-content: space-between; }
+#count { color: var(--amber); font-variant-numeric: tabular-nums; }
+#chips { display: flex; flex-wrap: wrap; gap: 5px; max-height: 84px; overflow-y: auto; }
+#chips span { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: rgba(255, 107, 149, 0.16); color: var(--cream); }
+#chips:empty::before { content: "Vide. Clique sur un mot pour le nourrir."; font-size: 12px; color: var(--dim); }
+.fact { margin: 0; font-size: 11px; line-height: 1.45; color: var(--dim); }
+
+@media (max-width: 640px) {
+  input { width: 120px; }
+  #belly { width: 52%; padding: 10px; }
+  #chips { max-height: 52px; }
+  .fact { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .w.back { animation: none; } }
+</style>
+
+<div id="app">
+  <header>
+    <h1>Caméléon <span>glouton</span></h1>
+    <div class="controls">
+      <form id="hunt">
+        <input id="q" placeholder="Mot à attraper" autocomplete="off" aria-label="Mot à attraper">
+        <button class="go" type="submit">Attraper</button>
+      </form>
+      <button type="button" id="bugs">Tous les insectes</button>
+      <button type="button" id="spitAll">Recracher</button>
+    </div>
+  </header>
+  <main id="stage">
+    <div id="text">
+      <p>Dans le jardin, une mouche tourne autour d'une poire trop mûre. Sur une feuille du figuier, un criquet répète sa chanson pendant qu'une coccinelle compte ses points. Plus loin, une libellule rase la mare et un moustique cherche quelqu'un à piquer.</p>
+      <p>Le caméléon ne bouge pas. Seul son œil tourne, lentement, d'un mot à l'autre. Il attend le bon moment. Une fourmi passe avec une miette, un papillon se pose sur une fleur, une sauterelle hésite au bord du chemin.</p>
+      <p>Puis, en un éclair, sa langue jaillit. Elle est collante, rapide et presque deux fois plus longue que lui. Rien ne lui échappe : ni les mots courts, ni les mots longs, ni ceux qui croient pouvoir se cacher au bout de la phrase.</p>
+    </div>
+    <canvas id="cv"></canvas>
+    <div id="bubble"></div>
+    <aside id="belly" aria-live="polite">
+      <h2>Dans son ventre <span id="count">0 mot</span></h2>
+      <div id="chips"></div>
+      <p class="fact">Pour de vrai : la langue d'un caméléon peut mesurer jusqu'à deux fois son corps et toucher sa proie en quelques centièmes de seconde.</p>
+    </aside>
+  </main>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), text = $('text'), cv = $('cv'), ctx = cv.getContext('2d');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const INSECTS = ['mouche', 'criquet', 'coccinelle', 'libellule', 'moustique', 'fourmi', 'papillon', 'sauterelle'];
+  const norm = s => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+  // Chaque mot devient une cible cliquable
+  for (const p of text.querySelectorAll('p')) {
+    const parts = p.textContent.split(/(\s+)/);
+    p.textContent = '';
+    for (const part of parts) {
+      if (!part.trim()) { p.append(part); continue; }
+      const s = document.createElement('span');
+      s.className = 'w'; s.textContent = part;
+      p.append(s);
+    }
+  }
+  const words = [...text.querySelectorAll('.w')];
+
+  let W = 0, H = 0, s = 1;
+  const ch = { x: 0, y: 0, hue: 125, hueTo: 125, eye: { x: 0, y: 0 }, look: null, gulp: 0, blink: 0, breath: 0 };
+  const queue = [];
+  let job = null, eatenCount = 0, idleLookAt = 0;
+
+  const mouth = () => ({ x: ch.x + 124 * s, y: ch.y - 12 * s });
+  const eyeC = () => ({ x: ch.x + 88 * s, y: ch.y - 24 * s });
+  const center = el => {
+    const r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    return { x: r.left - sr.left + r.width / 2, y: r.top - sr.top + r.height / 2 };
+  };
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    W = stage.clientWidth; H = stage.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    s = Math.max(0.55, Math.min(1.15, Math.min(W, H * 1.4) / 720));
+    ch.x = 110 * s + Math.max(16, W * 0.03);
+    ch.y = H - 64 * s;
+    text.style.paddingBottom = Math.round(170 * s) + 'px';
+  }
+
+  function say(msg) {
+    const b = $('bubble'), m = mouth();
+    b.textContent = msg;
+    b.style.left = Math.min(W - 120, m.x - 10) + 'px';
+    b.style.top = (ch.y - 110 * s) + 'px';
+    b.classList.add('show');
+    clearTimeout(say.t);
+    say.t = setTimeout(() => b.classList.remove('show'), 1100);
+  }
+
+  function feed(list) {
+    for (const el of list) if (!el.classList.contains('eaten') && !queue.includes(el) && job?.el !== el) queue.push(el);
+    if (!list.length) say('Rien à manger…');
+  }
+
+  function addToBelly(word) {
+    eatenCount++;
+    $('count').textContent = eatenCount + (eatenCount > 1 ? ' mots' : ' mot');
+    const chip = document.createElement('span');
+    chip.textContent = word.replace(/[^\p{L}\p{N}'’-]/gu, '') || word;
+    $('chips').prepend(chip);
+    if (eatenCount % 8 === 0) { say('Burp !'); ch.hue = 280; }
+    else say(['Miam !', 'Slurp !', 'Délicieux.', 'Encore !'][eatenCount % 4]);
+  }
+
+  // Étapes d'une chasse : viser, tirer la langue, ramener le mot, avaler
+  const T = reduced ? { aim: 0.2, shoot: 0.2, back: 0.4, gulp: 0.3 } : { aim: 0.35, shoot: 0.11, back: 0.38, gulp: 0.35 };
+  function startJob() {
+    const el = queue.shift();
+    if (!el || el.classList.contains('eaten')) return;
+    job = { el, phase: 'aim', t: 0, len: 0, dist: 0, prey: null };
+    el.classList.add('aim');
+    ch.look = el;
+    ch.hueTo = 48;
+  }
+
+  function step(dt) {
+    ch.breath += dt;
+    ch.blink = Math.max(0, ch.blink - dt);
+    if (Math.random() < dt * 0.25) ch.blink = 0.15;
+    ch.hue += (ch.hueTo - ch.hue) * Math.min(1, dt * 3);
+    ch.gulp = Math.max(0, ch.gulp - dt * 2.5);
+
+    if (!job && queue.length) startJob();
+    if (!job) {
+      ch.hueTo = 125;
+      if (performance.now() > idleLookAt) {
+        const live = words.filter(w => !w.classList.contains('eaten'));
+        ch.look = live.length ? live[Math.random() * live.length | 0] : null;
+        idleLookAt = performance.now() + 1200 + Math.random() * 1800;
+      }
+    }
+
+    const e = eyeC(), tgt = ch.look ? center(ch.look) : { x: e.x + 40, y: e.y - 20 };
+    const a = Math.atan2(tgt.y - e.y, tgt.x - e.x);
+    const want = { x: Math.cos(a) * 7 * s, y: Math.sin(a) * 7 * s };
+    ch.eye.x += (want.x - ch.eye.x) * Math.min(1, dt * (job ? 14 : 4));
+    ch.eye.y += (want.y - ch.eye.y) * Math.min(1, dt * (job ? 14 : 4));
+
+    if (!job) return;
+    job.t += dt;
+    const m = mouth(), c = center(job.el);
+    if (job.phase === 'aim' && job.t >= T.aim) { job.phase = 'shoot'; job.t = 0; job.dist = Math.hypot(c.x - m.x, c.y - m.y); }
+    if (job.phase === 'shoot') {
+      job.len = job.dist * Math.min(1, job.t / T.shoot);
+      job.tip = { x: m.x + (c.x - m.x) * job.len / job.dist, y: m.y + (c.y - m.y) * job.len / job.dist };
+      if (job.t >= T.shoot) {
+        job.phase = 'back'; job.t = 0;
+        job.el.classList.remove('aim');
+        job.el.classList.add('eaten');
+        const prey = document.createElement('div');
+        prey.className = 'prey'; prey.textContent = job.el.textContent;
+        stage.append(prey);
+        job.prey = prey;
+        job.from = c;
+        ch.hueTo = 20;
+      }
+    }
+    if (job.phase === 'back') {
+      const k = Math.min(1, job.t / T.back), e2 = k * k;
+      job.tip = { x: job.from.x + (m.x - job.from.x) * e2, y: job.from.y + (m.y - job.from.y) * e2 };
+      job.prey.style.transform = `translate(${job.tip.x}px, ${job.tip.y}px) translate(-50%, -50%) scale(${1 - 0.6 * e2})`;
+      if (k >= 1) { job.phase = 'gulp'; job.t = 0; job.prey.remove(); ch.gulp = 1; }
+    }
+    if (job.phase === 'gulp' && job.t >= T.gulp) {
+      addToBelly(job.el.textContent);
+      job = null;
+    }
+  }
+
+  // --- Dessin du caméléon (tout est proportionnel à s) ---
+  function drawBranch() {
+    const y = ch.y + 44 * s;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a3020'; ctx.lineWidth = 16 * s;
+    ctx.beginPath(); ctx.moveTo(-20, y + 6 * s); ctx.quadraticCurveTo(ch.x + 40 * s, y - 6 * s, ch.x + 250 * s, y + 10 * s); ctx.stroke();
+    ctx.strokeStyle = '#5d3d28'; ctx.lineWidth = 4 * s;
+    ctx.beginPath(); ctx.moveTo(-20, y + 2 * s); ctx.quadraticCurveTo(ch.x + 40 * s, y - 10 * s, ch.x + 245 * s, y + 6 * s); ctx.stroke();
+    ctx.fillStyle = '#2f5a3a';
+    for (const [dx, r] of [[-70, -0.6], [160, 0.5], [205, -0.2]]) {
+      ctx.save(); ctx.translate(ch.x + dx * s, y - 4 * s); ctx.rotate(r);
+      ctx.beginPath(); ctx.ellipse(0, -14 * s, 7 * s, 16 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+  }
+
+  function drawCham() {
+    const h = Math.round(ch.hue), x = ch.x, y = ch.y + Math.sin(ch.breath * 2) * 1.2 * s;
+    const body = `hsl(${h} 55% 44%)`, dark = `hsl(${h} 50% 26%)`, light = `hsl(${h} 62% 62%)`, belly = `hsl(${h + 15} 55% 70%)`;
+
+    // queue enroulée
+    const cx = x - 92 * s, cy = y + 18 * s;
+    let prev = null;
+    for (let a = 0; a <= Math.PI * 3.2; a += 0.12) {
+      const r = 30 * s * (1 - a / (Math.PI * 3.7));
+      const p = { x: cx + r * Math.cos(-a), y: cy + r * Math.sin(-a) };
+      if (prev) {
+        ctx.strokeStyle = body; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2, 13 * s * (1 - a / (Math.PI * 3.6)));
+        ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      }
+      prev = p;
+    }
+    ctx.strokeStyle = body; ctx.lineWidth = 14 * s;
+    ctx.beginPath(); ctx.moveTo(x - 50 * s, y + 6 * s); ctx.quadraticCurveTo(x - 60 * s, y + 18 * s, cx + 30 * s, cy); ctx.stroke();
+
+    // pattes qui serrent la branche
+    ctx.strokeStyle = dark; ctx.lineWidth = 8 * s; ctx.lineJoin = 'round';
+    for (const [hx, fx] of [[-34, -46], [-18, -8], [32, 22], [48, 58]]) {
+      ctx.beginPath(); ctx.moveTo(x + hx * s, y + 16 * s); ctx.lineTo(x + (hx + fx) / 2 * s, y + 30 * s); ctx.lineTo(x + fx * s, y + 42 * s); ctx.stroke();
+    }
+
+    // corps
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.ellipse(x, y, 64 * s, 34 * s, -0.05, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = belly;
+    ctx.beginPath(); ctx.ellipse(x + 4 * s, y + 18 * s, 50 * s, 13 * s, -0.05, 0, Math.PI); ctx.fill();
+    ctx.strokeStyle = dark; ctx.lineWidth = 3 * s;
+    for (const dx of [-30, -8, 14]) { ctx.beginPath(); ctx.arc(x + dx * s, y - 4 * s, 18 * s, -2.2, -1.1); ctx.stroke(); }
+    ctx.fillStyle = light;
+    for (let i = 0; i < 9; i++) {
+      const px = x - 50 * s + i * 11 * s, py = y - 31 * s + Math.abs(i - 4) * 1.6 * s;
+      ctx.beginPath(); ctx.moveTo(px - 4 * s, py + 3 * s); ctx.lineTo(px, py - 6 * s); ctx.lineTo(px + 4 * s, py + 3 * s); ctx.fill();
+    }
+
+    // tête et casque
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(x + 42 * s, y - 24 * s);
+    ctx.quadraticCurveTo(x + 70 * s, y - 62 * s, x + 84 * s, y - 50 * s);
+    ctx.lineTo(x + 128 * s, y - 14 * s);
+    ctx.quadraticCurveTo(x + 122 * s, y + 6 * s, x + 100 * s, y + 10 * s);
+    ctx.lineTo(x + 52 * s, y + 18 * s);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = dark; ctx.lineWidth = 2.5 * s;
+    ctx.beginPath(); ctx.moveTo(x + 126 * s, y - 12 * s); ctx.quadraticCurveTo(x + 100 * s, y - 2 * s, x + 76 * s, y + 2 * s); ctx.stroke();
+    if (ch.gulp > 0) {
+      ctx.fillStyle = belly;
+      ctx.beginPath(); ctx.arc(x + 72 * s, y + 14 * s, 11 * s * ch.gulp, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // œil en tourelle
+    const e = eyeC();
+    ctx.fillStyle = light; ctx.strokeStyle = dark; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(e.x, e.y, 16 * s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(e.x + ch.eye.x * 0.5, e.y + ch.eye.y * 0.5, 10 * s, 0, Math.PI * 2); ctx.stroke();
+    if (ch.blink > 0) {
+      ctx.strokeStyle = dark; ctx.lineWidth = 3 * s;
+      ctx.beginPath(); ctx.moveTo(e.x - 8 * s, e.y); ctx.lineTo(e.x + 8 * s, e.y); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#0b0f0c';
+      ctx.beginPath(); ctx.arc(e.x + ch.eye.x, e.y + ch.eye.y, 4.2 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(e.x + ch.eye.x + 1.4 * s, e.y + ch.eye.y - 1.4 * s, 1.3 * s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawTongue() {
+    if (!job || !job.tip || (job.phase !== 'shoot' && job.phase !== 'back')) return;
+    const m = mouth(), t = job.tip;
+    const dx = t.x - m.x, dy = t.y - m.y, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len, wob = Math.sin(performance.now() / 40) * Math.min(10, len * 0.04) * s;
+    ctx.strokeStyle = '#ff6b95'; ctx.lineCap = 'round'; ctx.lineWidth = 6 * s;
+    ctx.beginPath(); ctx.moveTo(m.x, m.y);
+    ctx.quadraticCurveTo(m.x + dx / 2 + nx * wob, m.y + dy / 2 + ny * wob, t.x, t.y); ctx.stroke();
+    ctx.fillStyle = '#ff8fb0';
+    ctx.beginPath(); ctx.arc(t.x, t.y, 8 * s, 0, Math.PI * 2); ctx.fill();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    step(dt);
+    ctx.clearRect(0, 0, W, H);
+    drawBranch();
+    drawCham();
+    drawTongue();
+    requestAnimationFrame(frame);
+  }
+
+  text.addEventListener('click', e => {
+    const w = e.target.closest('.w');
+    if (w) feed([w]);
+  });
+  $('hunt').addEventListener('submit', e => {
+    e.preventDefault();
+    const q = norm($('q').value);
+    if (q.length < 2) return say('Un mot, s’il te plaît !');
+    feed(words.filter(w => norm(w.textContent).includes(q)));
+  });
+  $('bugs').addEventListener('click', () => feed(words.filter(w => INSECTS.some(i => norm(w.textContent).startsWith(i)))));
+  $('spitAll').addEventListener('click', () => {
+    queue.length = 0;
+    const back = words.filter(w => w.classList.contains('eaten') && w !== job?.el);
+    if (!back.length) return say('Ventre vide !');
+    for (const w of back) {
+      w.classList.remove('eaten');
+      w.classList.add('back');
+      setTimeout(() => w.classList.remove('back'), 500);
+    }
+    eatenCount = 0;
+    $('count').textContent = '0 mot';
+    $('chips').textContent = '';
+    ch.hueTo = 125;
+    say('Pouah !');
+  });
+
+  new ResizeObserver(resize).observe(stage);
+  resize();
+  requestAnimationFrame(frame);
+  setTimeout(() => feed(words.filter(w => norm(w.textContent).startsWith('mouche'))), 900);
+})();
+</script>
