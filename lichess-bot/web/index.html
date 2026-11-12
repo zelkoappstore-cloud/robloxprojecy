@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1115">
+<title>Bot Lichess</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--txt:#eef1f6;--mut:#8b93a3;--acc:#7fb069;--bad:#e5655a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 32px}
+main{max-width:520px;margin:auto}
+h1{font-size:24px;margin:8px 0 4px}
+p.sub{color:var(--mut);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0c0e12;color:var(--txt);font-size:16px}
+.row{display:flex;gap:10px;margin-top:12px}.row>*{flex:1}
+button{width:100%;padding:14px;border:0;border-radius:12px;font-size:16px;font-weight:600;background:var(--acc);color:#0b1a07;margin-top:12px}
+button.sec{background:#262b35;color:var(--txt)}button.stop{background:var(--bad);color:#fff}
+button:disabled{opacity:.5}
+.status{display:flex;align-items:center;gap:10px;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mut)}
+.on .dot{background:var(--acc);box-shadow:0 0 10px var(--acc)}
+#game a{color:var(--acc)}
+#log{font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--mut);max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+small{color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>♟️ Bot Lichess</h1>
+<p class="sub">Stockfish joue sur ton compte BOT Lichess, directement depuis Safari.</p>
+
+<div class="card" id="setup">
+  <label for="tok">Token Lichess (scope <b>bot:play</b>)</label>
+  <input id="tok" type="password" autocomplete="off" placeholder="lip_…">
+  <small>Gardé seulement sur cet appareil. <a style="color:var(--acc)" href="https://lichess.org/account/oauth/token/create?scopes[]=bot:play&description=Bot%20Safari" target="_blank">Créer un token</a></small>
+  <div class="row">
+    <div><label for="mt">Temps max / coup</label>
+      <select id="mt"><option value="1000">1 s</option><option value="3000" selected>3 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select></div>
+    <div><label for="rated">Parties classées</label>
+      <select id="rated"><option value="1">Accepter</option><option value="0">Refuser</option></select></div>
+  </div>
+  <button id="go">Connecter le bot</button>
+  <button id="up" class="sec">Transformer le compte en BOT (définitif)</button>
+</div>
+
+<div class="card">
+  <div class="status" id="st"><span class="dot"></span><span id="stt">Déconnecté</span></div>
+  <div id="game" style="margin-top:8px;color:var(--mut)">Aucune partie en cours</div>
+  <button id="stop" class="stop" hidden>Arrêter le bot</button>
+</div>
+
+<div class="card"><label>Journal</label><div id="log"></div></div>
+<small>Garde Safari ouvert au premier plan pendant les parties : iOS met en pause les pages en arrière-plan.</small>
+</main>
+
+<script>
+const API = "https://lichess.org";
+const $ = id => document.getElementById(id);
+const store = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+$("tok").value = store.get("tok") || "";
+$("mt").value = store.get("mt") || "3000";
+
+function log(m){const l=$("log");l.textContent=new Date().toLocaleTimeString()+"  "+m+"\n"+l.textContent;}
+function status(on,txt){$("st").classList.toggle("on",on);$("stt").textContent=txt;}
+
+let token="", me=null, ctrl=null, busy=null, wake=null;
+const H = () => ({Authorization:"Bearer "+token});
+const post = (p,body) => fetch(API+p,{method:"POST",headers:{...H(),"Content-Type":"application/x-www-form-urlencoded"},body:body?new URLSearchParams(body):undefined})
+  .then(r=>{if(!r.ok)r.text().then(t=>log("⚠️ "+p+" → "+r.status+" "+t.slice(0,120)));return r;});
+
+/* Lecture d'un flux NDJSON */
+async function stream(path, onEvent, signal){
+  const r = await fetch(API+path,{headers:H(),signal});
+  if(!r.ok) throw new Error(path+" → "+r.status);
+  const rd = r.body.getReader(), dec = new TextDecoder(); let buf="";
+  for(;;){
+    const {value,done} = await rd.read(); if(done) return;
+    buf += dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf("\n"))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(line) await onEvent(JSON.parse(line));}
+  }
+}
+
+/* Stockfish dans un Web Worker */
+let engine=null, waiter=null;
+function startEngine(){
+  if(engine) return;
+  const src = 'importScripts("https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js")';
+  engine = new Worker(URL.createObjectURL(new Blob([src],{type:"application/javascript"})));
+  engine.onmessage = e => {const l=String(e.data); if(l.startsWith("bestmove")&&waiter){const w=waiter;waiter=null;w(l.split(" ")[1]);}};
+  ["uci","setoption name Hash value 64","ucinewgame","isready"].forEach(c=>engine.postMessage(c));
+}
+function bestMove(fen,moves,ms){
+  return new Promise(res=>{
+    waiter=res;
+    engine.postMessage("position "+(fen?"fen "+fen:"startpos")+(moves?" moves "+moves:""));
+    engine.postMessage("go movetime "+Math.round(ms));
+  });
+}
+
+/* Une partie */
+async function playGame(id){
+  busy=id; let white=true, fen=null;
+  $("game").innerHTML=`Partie en cours : <a href="https://lichess.org/${id}" target="_blank">lichess.org/${id}</a>`;
+  log("♟️ Partie "+id);
+  engine.postMessage("ucinewgame");
+  try{
+    await stream("/api/bot/game/stream/"+id, async ev=>{
+      let s;
+      if(ev.type==="gameFull"){white=ev.white.id===me.id; if(ev.initialFen&&ev.initialFen!=="startpos")fen=ev.initialFen; s=ev.state;
+        post(`/api/bot/game/${id}/chat`,{room:"player",text:"Bonne partie ! (bot Stockfish)"});}
+      else if(ev.type==="gameState") s=ev; else return;
+      if(s.status!=="started"){log("🏁 Fin : "+s.status+(s.winner?" ("+s.winner+")":""));return;}
+      const moves=s.moves.trim(), n=moves?moves.split(" ").length:0;
+      const whiteStarts=!fen||fen.split(" ")[1]==="w";
+      const myTurn=((n%2===0)===whiteStarts)===white;
+      if(!myTurn) return;
+      const left=(white?s.wtime:s.btime)||60000, inc=(white?s.winc:s.binc)||0;
+      const ms=Math.max(50,Math.min(+$("mt").value, left/30+inc*.8, left-500));
+      const mv=await bestMove(fen,moves,ms);
+      if(mv&&mv!=="(none)") post(`/api/bot/game/${id}/move/${mv}`);
+    }, ctrl.signal);
+  }catch(e){ if(ctrl&&!ctrl.signal.aborted) log("⚠️ "+e.message); }
+  busy=null; $("game").textContent="Aucune partie en cours";
+}
+
+/* Défis */
+function onChallenge(c){
+  const who=c.challenger?c.challenger.name:"?", v=c.variant.key;
+  let reason=null;
+  if(c.challenger&&c.challenger.id===me.id) return;
+  if(busy) reason="later";
+  else if(!["standard","fromPosition"].includes(v)) reason="variant";
+  else if(c.speed==="correspondence") reason="timeControl";
+  else if(c.rated&&$("rated").value==="0") reason="casual";
+  if(reason){log(`🚫 Refus ${who} (${reason})`);post(`/api/challenge/${c.id}/decline`,{reason});}
+  else{log(`✅ Défi de ${who} accepté (${c.speed})`);post(`/api/challenge/${c.id}/accept`);}
+}
+
+async function login(){
+  token=$("tok").value.trim(); if(!token){alert("Colle ton token d'abord");return false;}
+  store.set("tok",token); store.set("mt",$("mt").value);
+  const r=await fetch(API+"/api/account",{headers:H()}).catch(()=>null);
+  if(!r||!r.ok){alert("Token invalide ou réseau indisponible");return false;}
+  me=await r.json(); return true;
+}
+
+$("up").onclick=async()=>{
+  if(!await login())return;
+  if(!confirm(`Transformer « ${me.username} » en compte BOT ? C'est DÉFINITIF et le compte ne doit avoir joué aucune partie.`))return;
+  const r=await post("/api/bot/account/upgrade");
+  alert(r.ok?"🤖 Compte transformé en BOT !":"Échec : le compte a peut-être déjà joué des parties.");
+};
+
+$("go").onclick=async()=>{
+  if(!await login())return;
+  if(me.title!=="BOT"){alert("Ce compte n'est pas encore BOT. Appuie d'abord sur « Transformer le compte en BOT ».");return;}
+  startEngine(); ctrl=new AbortController();
+  try{wake=await navigator.wakeLock?.request("screen");}catch(e){}
+  $("setup").hidden=true; $("stop").hidden=false;
+  status(true,"Connecté : "+me.username+" — en attente de défis");
+  log("🤖 Connecté. Défie "+me.username+" depuis un autre compte.");
+  const myCtrl=ctrl;
+  while(ctrl===myCtrl&&!myCtrl.signal.aborted){
+    try{ await stream("/api/stream/event", ev=>{
+        if(ev.type==="challenge") onChallenge(ev.challenge);
+        else if(ev.type==="gameStart"&&!busy) playGame(ev.game.gameId||ev.game.id);
+      }, ctrl.signal);
+      await new Promise(r=>setTimeout(r,2000));
+    }catch(e){ if(!ctrl||ctrl.signal.aborted)break; log("🔌 Reconnexion… ("+e.message+")"); await new Promise(r=>setTimeout(r,5000)); }
+  }
+};
+
+$("stop").onclick=()=>{ctrl.abort();ctrl=null;wake?.release?.();status(false,"Déconnecté");$("setup").hidden=false;$("stop").hidden=true;log("👋 Bot arrêté");};
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&ctrl)try{wake=await navigator.wakeLock?.request("screen")}catch(e){}});
+</script>
+</body>
+</html>
