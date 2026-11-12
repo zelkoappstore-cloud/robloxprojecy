@@ -36,7 +36,7 @@ small{color:var(--mut);font-size:12px}
 <body>
 <main>
 <h1>♟️ Bot Lichess</h1>
-<p class="sub">Stockfish joue sur ton compte BOT Lichess, directement depuis Safari.</p>
+<p class="sub">Stockfish 19 joue sur ton compte BOT Lichess, directement depuis Safari.</p>
 
 <div class="card" id="setup">
   <label for="tok">Token Lichess (scope <b>bot:play</b>)</label>
@@ -44,7 +44,7 @@ small{color:var(--mut);font-size:12px}
   <small>Gardé seulement sur cet appareil. <a style="color:var(--acc)" href="https://lichess.org/account/oauth/token/create?scopes[]=bot:play&description=Bot%20Safari" target="_blank">Créer un token</a></small>
   <div class="row">
     <div><label for="mt">Temps max / coup</label>
-      <select id="mt"><option value="1000">1 s</option><option value="3000" selected>3 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select></div>
+      <select id="mt"><option value="1000">1 s</option><option value="3000">3 s</option><option value="5000" selected>5 s</option><option value="10000">10 s</option></select></div>
     <div><label for="rated">Parties classées</label>
       <select id="rated"><option value="1">Accepter</option><option value="0">Refuser</option></select></div>
   </div>
@@ -76,7 +76,7 @@ const API = "https://lichess.org";
 const $ = id => document.getElementById(id);
 const store = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 $("tok").value = store.get("tok") || "";
-$("mt").value = store.get("mt") || "3000";
+$("mt").value = store.get("mt") || "5000";
 
 function log(m){const l=$("log");l.textContent=new Date().toLocaleTimeString()+"  "+m+"\n"+l.textContent;}
 function status(on,txt){$("st").classList.toggle("on",on);$("stt").textContent=txt;}
@@ -98,15 +98,47 @@ async function stream(path, onEvent, signal){
   }
 }
 
-/* Stockfish dans un Web Worker */
-let engine=null, waiter=null;
-function startEngine(){
+/* Stockfish 19 (réseau neuronal) dans un Web Worker, multi-cœurs si possible */
+let engine=null, waiter=null, fenWaiter=null;
+function startEngine(forceSingle){
   if(engine) return;
-  const src = 'importScripts("https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js")';
-  engine = new Worker(URL.createObjectURL(new Blob([src],{type:"application/javascript"})));
-  engine.onerror = e => log("❌ Moteur Stockfish non chargé : "+(e.message||"erreur"));
-  engine.onmessage = e => {const l=String(e.data); if(l==="uciok") log("🧠 Moteur Stockfish prêt"); if(l.startsWith("Fen: ")) draw(l.slice(5)); if(l.startsWith("bestmove")&&waiter){const w=waiter;waiter=null;w(l.split(" ")[1]);}};
-  ["uci","setoption name Hash value 64","ucinewgame","isready"].forEach(c=>engine.postMessage(c));
+  const mt = !forceSingle && self.crossOriginIsolated && typeof SharedArrayBuffer!=="undefined";
+  const threads = mt ? Math.max(1,Math.min(4,(navigator.hardwareConcurrency||2)-1)) : 1;
+  engine = new Worker("/sf/"+(mt?"stockfish-19-lite.js":"stockfish-19-lite-single.js"));
+  let ready=false;
+  const fallback=why=>{if(ready)return; if(mt){log("↩️ Mode multi-cœurs indisponible ("+why+"), passage en 1 cœur");engine.terminate();engine=null;startEngine(true);}
+    else log("❌ Moteur Stockfish non chargé : "+why);};
+  engine.onerror = e => {e.preventDefault&&e.preventDefault();fallback(e.message||"erreur");};
+  setTimeout(()=>fallback("délai dépassé"),15000);
+  engine.onmessage = e => {const l=String(e.data);
+    if(l==="uciok"){ready=true;} if(l==="uciok") log(`🧠 Stockfish 19 prêt (${threads} cœur${threads>1?"s":""})`);
+    if(l.startsWith("Fen: ")){const f=l.slice(5);draw(f);if(fenWaiter){const w=fenWaiter;fenWaiter=null;w(f);}}
+    if(l.startsWith("bestmove")&&waiter){const w=waiter;waiter=null;w(l.split(" ")[1]);}};
+  ["uci","setoption name Threads value "+threads,"setoption name Hash value 128","ucinewgame","isready"].forEach(c=>engine.postMessage(c));
+}
+function getFen(fen,moves){
+  return new Promise(res=>{fenWaiter=res;
+    engine.postMessage("position "+(fen?"fen "+fen:"startpos")+(moves?" moves "+moves:"")); engine.postMessage("d");});
+}
+/* Requête avec délai max (ne jamais perdre de temps à la pendule) */
+async function getJSON(url,ms,headers){
+  const c=new AbortController(), t=setTimeout(()=>c.abort(),ms);
+  try{const r=await fetch(url,{signal:c.signal,headers});return r.ok?await r.json():null;}catch(e){return null;}finally{clearTimeout(t);}
+}
+/* 1) Finales ≤ 7 pièces : base de données parfaite de Lichess
+   2) Ouverture / positions connues : analyse profonde du cloud Lichess
+   3) Sinon : Stockfish 19 */
+async function smartMove(fen,ply,left){
+  const pieces=fen.split(" ")[0].replace(/[^a-zA-Z]/g,"").length;
+  if(pieces<=7&&left>3000){
+    const tb=await getJSON("https://tablebase.lichess.ovh/standard?fen="+encodeURIComponent(fen),1500);
+    if(tb&&tb.moves&&tb.moves.length){return {mv:tb.moves[0].uci,src:"📚 base de finales ("+(tb.category||"")+")"};}
+  }
+  if(ply<40&&left>10000){
+    const ce=await getJSON(API+"/api/cloud-eval?fen="+encodeURIComponent(fen),1200,H());
+    if(ce&&ce.depth>=28&&ce.pvs&&ce.pvs[0]&&ce.pvs[0].moves) return {mv:ce.pvs[0].moves.split(" ")[0],src:"☁️ analyse cloud (prof. "+ce.depth+")"};
+  }
+  return null;
 }
 let flip=false;
 function draw(fen){
@@ -136,15 +168,19 @@ async function playGame(id){
       if(ev.type==="gameFull"){white=ev.white.id===me.id; flip=!white; if(ev.initialFen&&ev.initialFen!=="startpos")fen=ev.initialFen; s=ev.state;
         post(`/api/bot/game/${id}/chat`,{room:"player",text:"Bonne partie ! (bot Stockfish)"});}
       else if(ev.type==="gameState") s=ev; else return;
-      engine.postMessage("position "+(fen?"fen "+fen:"startpos")+(s.moves.trim()?" moves "+s.moves.trim():"")); engine.postMessage("d");
+      const cur=await getFen(fen,s.moves.trim());
       if(s.status!=="started"){log("🏁 Fin : "+s.status+(s.winner?" ("+s.winner+")":""));return;}
       const moves=s.moves.trim(), n=moves?moves.split(" ").length:0;
       const whiteStarts=!fen||fen.split(" ")[1]==="w";
       const myTurn=((n%2===0)===whiteStarts)===white;
       if(!myTurn) return;
       const left=(white?s.wtime:s.btime)||60000, inc=(white?s.winc:s.binc)||0;
-      const ms=Math.max(50,Math.min(+$("mt").value, left/30+inc*.8, left-500));
-      const mv=await bestMove(fen,moves,ms);
+      const t0=Date.now(), sm=await smartMove(cur,n,left);
+      let mv;
+      if(sm){mv=sm.mv;log(sm.src+" → "+mv);}
+      else{const rest=left-(Date.now()-t0);
+        const ms=Math.max(50,Math.min(+$("mt").value, rest/25+inc*.9, rest-800));
+        mv=await bestMove(fen,moves,ms);}
       if(mv&&mv!=="(none)") post(`/api/bot/game/${id}/move/${mv}`);
     }, ctrl.signal);
   }catch(e){ if(ctrl&&!ctrl.signal.aborted) log("⚠️ "+e.message); }
