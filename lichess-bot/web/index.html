@@ -50,6 +50,13 @@ small{color:var(--mut);font-size:12px}
 <div class="card">
   <div class="status" id="st"><span class="dot"></span><span id="stt">Déconnecté</span></div>
   <div id="game" style="margin-top:8px;color:var(--mut)">Aucune partie en cours</div>
+  <div id="ai" hidden>
+    <div class="row"><div><label for="lvl">Niveau de l'ordinateur</label>
+      <select id="lvl"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option selected>8</option></select></div>
+    <div><label for="tc">Cadence</label>
+      <select id="tc"><option value="180+2">3+2</option><option value="300+3" selected>5+3</option><option value="600+5">10+5</option></select></div></div>
+    <button id="aib" class="sec">Lancer une partie contre l'ordinateur Lichess</button>
+  </div>
   <button id="stop" class="stop" hidden>Arrêter le bot</button>
 </div>
 
@@ -160,7 +167,7 @@ $("go").onclick=async()=>{
   if(me.title!=="BOT"){alert("Ce compte n'est pas encore BOT. Appuie d'abord sur « Transformer le compte en BOT ».");return;}
   startEngine(); ctrl=new AbortController();
   try{wake=await navigator.wakeLock?.request("screen");}catch(e){}
-  $("setup").hidden=true; $("stop").hidden=false;
+  $("setup").hidden=true; $("stop").hidden=false; $("ai").hidden=false;
   status(true,"Connecté : "+me.username+" — en attente de défis");
   log("🤖 Connecté. Défie "+me.username+" depuis un autre compte.");
   const myCtrl=ctrl;
@@ -174,7 +181,13 @@ $("go").onclick=async()=>{
   }
 };
 
-$("stop").onclick=()=>{ctrl.abort();ctrl=null;wake?.release?.();status(false,"Déconnecté");$("setup").hidden=false;$("stop").hidden=true;log("👋 Bot arrêté");};
+$("stop").onclick=()=>{ctrl.abort();ctrl=null;wake?.release?.();status(false,"Déconnecté");$("setup").hidden=false;$("stop").hidden=true;$("ai").hidden=true;log("👋 Bot arrêté");};
+$("aib").onclick=async()=>{
+  if(busy){alert("Une partie est déjà en cours");return;}
+  const [lim,inc]=$("tc").value.split("+");
+  const r=await post("/api/challenge/ai",{level:$("lvl").value,"clock.limit":lim,"clock.increment":inc,color:"random"});
+  if(r.ok) log("🖥️ Partie lancée contre l'ordinateur niveau "+$("lvl").value);
+};
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&ctrl)try{wake=await navigator.wakeLock?.request("screen")}catch(e){}});
 </script>
 </body>
