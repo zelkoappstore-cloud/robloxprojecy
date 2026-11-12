@@ -26,6 +26,11 @@ button:disabled{opacity:.5}
 #game a{color:var(--acc)}
 #log{font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--mut);max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word}
 small{color:var(--mut);font-size:12px}
+#board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;margin-top:12px}
+#board div{display:flex;align-items:center;justify-content:center;font-size:min(9vw,44px);line-height:1;color:#111}
+#board .l{background:#ebecd0}#board .d{background:#779556}
+#board .w{color:#fff;text-shadow:0 0 2px #000,0 0 1px #000}
+.warn{background:#3a2a12;color:#f3c77a;border-radius:10px;padding:10px;font-size:13px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -50,6 +55,8 @@ small{color:var(--mut);font-size:12px}
 <div class="card">
   <div class="status" id="st"><span class="dot"></span><span id="stt">Déconnecté</span></div>
   <div id="game" style="margin-top:8px;color:var(--mut)">Aucune partie en cours</div>
+  <div id="board" hidden></div>
+  <div class="warn" id="warn" hidden>⚠️ Ne quitte pas cette page pendant la partie : sur iPhone, le bot s'arrête dès que Safari change d'onglet ou que l'écran se verrouille.</div>
   <div id="ai" hidden>
     <div class="row"><div><label for="lvl">Niveau de l'ordinateur</label>
       <select id="lvl"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option selected>8</option></select></div>
@@ -97,8 +104,17 @@ function startEngine(){
   if(engine) return;
   const src = 'importScripts("https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js")';
   engine = new Worker(URL.createObjectURL(new Blob([src],{type:"application/javascript"})));
-  engine.onmessage = e => {const l=String(e.data); if(l.startsWith("bestmove")&&waiter){const w=waiter;waiter=null;w(l.split(" ")[1]);}};
+  engine.onerror = e => log("❌ Moteur Stockfish non chargé : "+(e.message||"erreur"));
+  engine.onmessage = e => {const l=String(e.data); if(l==="uciok") log("🧠 Moteur Stockfish prêt"); if(l.startsWith("Fen: ")) draw(l.slice(5)); if(l.startsWith("bestmove")&&waiter){const w=waiter;waiter=null;w(l.split(" ")[1]);}};
   ["uci","setoption name Hash value 64","ucinewgame","isready"].forEach(c=>engine.postMessage(c));
+}
+let flip=false;
+function draw(fen){
+  const P={K:"♚",Q:"♛",R:"♜",B:"♝",N:"♞",P:"♟"}, b=$("board"); let rows=fen.split(" ")[0].split("/"), h="";
+  let cells=[]; rows.forEach((r,y)=>{let x=0;for(const c of r){if(/\d/.test(c)){for(let i=0;i<+c;i++)cells.push([y,x++,""]);}else cells.push([y,x++,c]);}});
+  if(flip) cells.reverse();
+  for(const [y,x,c] of cells){const pc=c?P[c.toUpperCase()]:"";h+=`<div class="${(x+y)%2?"d":"l"} ${c&&c===c.toUpperCase()?"w":""}">${pc}</div>`;}
+  b.innerHTML=h; b.hidden=false;
 }
 function bestMove(fen,moves,ms){
   return new Promise(res=>{
@@ -111,15 +127,16 @@ function bestMove(fen,moves,ms){
 /* Une partie */
 async function playGame(id){
   busy=id; let white=true, fen=null;
-  $("game").innerHTML=`Partie en cours : <a href="https://lichess.org/${id}" target="_blank">lichess.org/${id}</a>`;
+  $("game").innerHTML=`Partie en cours : lichess.org/${id}`; $("warn").hidden=false;
   log("♟️ Partie "+id);
   engine.postMessage("ucinewgame");
   try{
     await stream("/api/bot/game/stream/"+id, async ev=>{
       let s;
-      if(ev.type==="gameFull"){white=ev.white.id===me.id; if(ev.initialFen&&ev.initialFen!=="startpos")fen=ev.initialFen; s=ev.state;
+      if(ev.type==="gameFull"){white=ev.white.id===me.id; flip=!white; if(ev.initialFen&&ev.initialFen!=="startpos")fen=ev.initialFen; s=ev.state;
         post(`/api/bot/game/${id}/chat`,{room:"player",text:"Bonne partie ! (bot Stockfish)"});}
       else if(ev.type==="gameState") s=ev; else return;
+      engine.postMessage("position "+(fen?"fen "+fen:"startpos")+(s.moves.trim()?" moves "+s.moves.trim():"")); engine.postMessage("d");
       if(s.status!=="started"){log("🏁 Fin : "+s.status+(s.winner?" ("+s.winner+")":""));return;}
       const moves=s.moves.trim(), n=moves?moves.split(" ").length:0;
       const whiteStarts=!fen||fen.split(" ")[1]==="w";
@@ -131,7 +148,7 @@ async function playGame(id){
       if(mv&&mv!=="(none)") post(`/api/bot/game/${id}/move/${mv}`);
     }, ctrl.signal);
   }catch(e){ if(ctrl&&!ctrl.signal.aborted) log("⚠️ "+e.message); }
-  busy=null; $("game").textContent="Aucune partie en cours";
+  busy=null; $("warn").hidden=true; $("game").textContent="Partie terminée — en attente d'un défi";
 }
 
 /* Défis */
@@ -188,7 +205,12 @@ $("aib").onclick=async()=>{
   const r=await post("/api/challenge/ai",{level:$("lvl").value,"clock.limit":lim,"clock.increment":inc,color:"random"});
   if(r.ok) log("🖥️ Partie lancée contre l'ordinateur niveau "+$("lvl").value);
 };
-document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&ctrl)try{wake=await navigator.wakeLock?.request("screen")}catch(e){}});
+/* Retour au premier plan : iOS a pu couper les connexions, on se reconnecte (Lichess renvoie les parties en cours) */
+let hiddenAt=0;
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){hiddenAt=Date.now();return;}
+  if(ctrl&&Date.now()-hiddenAt>2000){log("🔄 Retour sur la page : reconnexion");$("stop").onclick();$("go").onclick();}
+});
 </script>
 </body>
 </html>
