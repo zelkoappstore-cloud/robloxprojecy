@@ -8,7 +8,7 @@ import numpy as np, trimesh
 from manifold3d import Manifold
 
 CLR, WALL, LIP = 0.3, 1.8, 2.55    # jeu, paroi, rebord avant qui retient l'appareil
-ORANGE = [1.0, 0.51, 0.0, 1.0]
+ORANGE = [1.0, 0.223, 0.0, 1.0]   # #FF8200 en couleur lineaire (glTF)
 
 dev = trimesh.load("reference/flipper-zero-body-3d.stl")
 (x0, y0, z0), (x1, y1, z1) = dev.bounds          # 40.1 x 100.3 x 25.6 mm
@@ -61,9 +61,9 @@ mesh.apply_translation([-xc, -(y0 + y1) / 2, -z0 + CLR + WALL])   # centre, dos 
 mesh.export("flipper_zero_case.stl")
 
 pbr = trimesh.visual.material.PBRMaterial
-mesh.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=ORANGE, roughnessFactor=0.55))
+mesh.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=ORANGE, metallicFactor=0.0, roughnessFactor=0.6))
 ghost = dev.copy(); ghost.apply_translation([-xc, -(y0 + y1) / 2, -z0 + CLR + WALL])
-ghost.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=[0.93, 0.93, 0.92, 1], roughnessFactor=0.7))
+ghost.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=[0.5, 0.5, 0.48, 1], metallicFactor=0.0, roughnessFactor=0.75))
 trimesh.Scene({"coque": mesh}).export("flipper_zero_case_orange.glb")
 trimesh.Scene({"coque": mesh, "flipper": ghost}).export("apercu_avec_flipper.glb")
 print("etanche:", mesh.is_watertight, "dims:", np.round(mesh.extents, 1), "vol cm3:", round(mesh.volume / 1000, 1))

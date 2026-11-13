@@ -1,0 +1,131 @@
+<title>Coque Flipper Zero</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout : visionneuse 3D plein ecran, en-tete compact, puces d'infos en bas */
+:root{--bg:#f3efe9;--fg:#231c15;--muted:#6f6357;--accent:#ff8200;--line:#e2d9cd;--chip:#fffaf3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17130f;--fg:#f4ece2;--muted:#a7988a;--line:#2e261f;--chip:#211b15;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#17130f;--fg:#f4ece2;--muted:#a7988a;--line:#2e261f;--chip:#211b15;color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;display:flex;flex-direction:column;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
+header{padding-block:12px 4px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline}
+h1{font-size:18px;margin:0}h1 span{color:var(--accent)}
+.hint{color:var(--muted);font-size:13px;line-height:1.4}
+kbd{font:600 11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px;background:var(--chip)}
+#v{flex:1;min-height:320px;position:relative}#v canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
+#load{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted)}
+footer{display:flex;flex-wrap:wrap;gap:8px;padding-block:8px 14px;border-top:1px solid var(--line);align-items:center}
+.c{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-variant-numeric:tabular-nums;background:var(--chip);color:var(--fg)}
+.c b{color:var(--accent)}
+button.c{cursor:pointer;font-weight:600}
+button.c[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1b1208}
+button.c:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.src{font-size:11px;color:var(--muted);flex-basis:100%}
+.src a{color:inherit}
+</style>
+<header><h1>Coque Flipper Zero <span>orange</span></h1>
+<span class="hint">Clique sur la croix, le bouton central et le bouton retour du Flipper · clavier : <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> <kbd>Entrée</kbd> <kbd>Retour arrière</kbd> · glisse pour tourner</span></header>
+<div id="v"><div id="load">Chargement du modèle…</div></div>
+<footer>
+<button id="tc" class="c" type="button" aria-pressed="true">Coque</button>
+<button id="tf" class="c" type="button" aria-pressed="true">Flipper</button>
+<button id="vf" class="c" type="button" aria-pressed="false">Vue de face</button>
+<span class="c">Extérieur <b>104 × 44 × 30 mm</b></span><span class="c">Parois <b>1,8 mm</b></span><span class="c">Jeu <b>0,3 mm</b></span><span class="c">TPU orange</span>
+<span class="src">Sources : modèle 3D et plan officiels <a href="https://github.com/flipperdevices/flipperzero-3d-models" target="_blank" rel="noopener">flipperzero-3d-models</a>, animations et icônes du <a href="https://github.com/flipperdevices/flipperzero-firmware" target="_blank" rel="noopener">firmware officiel</a>, polices helvB08 et HaxrCorp 4089 de <a href="https://github.com/olikraus/u8g2" target="_blank" rel="noopener">u8g2</a>.</span>
+</footer>
+<script>/*ASSETS*/</script>
+<script>/*SCREEN*/</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Reperes mesures sur le modele officiel (mm, repere du STL d'origine : -x = bord GPIO, +y = cote USB-C, +z = face ecran)
+const OFF = {x: 13.55, y: -26.144};               // translation appliquee au Flipper dans le GLB
+const SCREEN = {cx: -17.55, cy: 19.5, z: 27.24, w: 36.4, h: 21.4};
+const DPAD = {cx: -17.5, cy: 51.5, rOk: 3.0, r: 10.4, z: 27.72};
+const BACK = {cx: -10.25, cy: 65.0, r: 3.4, z: 27.62};
+
+const el = document.getElementById('v');
+const r = new THREE.WebGLRenderer({antialias: true, alpha: true});
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.outputEncoding = THREE.sRGBEncoding; el.appendChild(r.domElement);
+const s = new THREE.Scene(), cam = new THREE.PerspectiveCamera(32, 1, 1, 2000);
+s.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.0));
+const d1 = new THREE.DirectionalLight(0xffffff, 0.85); d1.position.set(60, 160, 120); s.add(d1);
+const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-100, -50, -80); s.add(d2);
+const ctl = new THREE.OrbitControls(cam, r.domElement); ctl.enableDamping = true;
+const FRONT = new THREE.Vector3(0, 135, 48);
+cam.position.copy(FRONT);
+
+// Ecran : canvas 2D -> texture
+const sc = document.createElement('canvas'); sc.width = 728; sc.height = 428;
+const sctx = sc.getContext('2d');
+const tex = new THREE.CanvasTexture(sc); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+let flipper, caseObj, glow;
+
+const B = Uint8Array.from(atob("/*GLB*/"), c => c.charCodeAt(0)).buffer;
+new THREE.GLTFLoader().parse(B, "", g => {
+  const root = new THREE.Group(); g.scene.rotation.x = -Math.PI / 2; root.add(g.scene); root.rotation.y = -Math.PI / 2; root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root), c = box.getCenter(new THREE.Vector3());
+  root.position.sub(c); s.add(root);
+  flipper = root.getObjectByName('flipper'); caseObj = root.getObjectByName('coque');
+  // plan de l'ecran, colle sur la vitre (largeur le long de +y, haut vers -x)
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN.w, SCREEN.h), new THREE.MeshBasicMaterial({map: tex, toneMapped: false}));
+  scr.position.set(SCREEN.cx + OFF.x, SCREEN.cy + OFF.y, SCREEN.z); scr.rotation.z = Math.PI / 2;
+  flipper.add(scr);
+  glow = new THREE.Mesh(new THREE.RingGeometry(1.2, 2.6, 32), new THREE.MeshBasicMaterial({color: 0xff8200, transparent: true, opacity: 0, depthTest: false}));
+  glow.renderOrder = 5; flipper.add(glow);
+  document.getElementById('load').remove();
+}, e => { document.getElementById('load').textContent = "Le modèle n'a pas pu être chargé."; });
+
+// Detection du bouton sous le pointeur (coordonnees du modele officiel)
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function buttonAt(ev) {
+  if (!flipper || !flipper.visible) return null;
+  const rc = r.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - rc.left) / rc.width) * 2 - 1, -((ev.clientY - rc.top) / rc.height) * 2 + 1);
+  ray.setFromCamera(ndc, cam);
+  const hit = ray.intersectObject(flipper, false)[0];
+  if (!hit) return null;
+  const p = flipper.worldToLocal(hit.point.clone()); const x = p.x - OFF.x, y = p.y - OFF.y;
+  const dx = x - DPAD.cx, dy = y - DPAD.cy, dd = Math.hypot(dx, dy);
+  if (dd < DPAD.rOk) return {k: 'ok', x: DPAD.cx, y: DPAD.cy, z: DPAD.z};
+  if (dd < DPAD.r) {
+    const k = Math.abs(dy) > Math.abs(dx) ? (dy > 0 ? 'right' : 'left') : (dx < 0 ? 'up' : 'down');
+    const ang = Math.atan2(dx, dy), q = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
+    return {k, x: DPAD.cx + Math.sin(q) * 6.8, y: DPAD.cy + Math.cos(q) * 6.8, z: DPAD.z};
+  }
+  if (Math.hypot(x - BACK.cx, y - BACK.cy) < BACK.r) return {k: 'back', x: BACK.cx, y: BACK.cy, z: BACK.z};
+  return null;
+}
+let glowT = 0;
+function press(k, b) {
+  FZScreen.press(k);
+  if (glow && b) { glow.position.set(b.x + OFF.x, b.y + OFF.y, b.z + 0.1); glowT = performance.now(); }
+  if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) {}
+}
+let down = null;
+r.domElement.addEventListener('pointerdown', e => { down = {x: e.clientX, y: e.clientY, b: buttonAt(e)}; if (down.b) ctl.enabled = false; });
+window.addEventListener('pointerup', e => {
+  if (down && down.b && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8) press(down.b.k, down.b);
+  down = null; ctl.enabled = true;
+});
+r.domElement.addEventListener('pointermove', e => { if (!down) r.domElement.style.cursor = buttonAt(e) ? 'pointer' : 'grab'; });
+const KEYS = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'ok', ' ': 'ok', Backspace: 'back', Escape: 'back'};
+const KPOS = {ok: [0, 0], up: [-6.8, 0], down: [6.8, 0], left: [0, -6.8], right: [0, 6.8]};
+window.addEventListener('keydown', e => {
+  const k = KEYS[e.key]; if (!k || e.target.closest('button')) return; e.preventDefault();
+  press(k, k === 'back' ? {x: BACK.cx, y: BACK.cy, z: BACK.z} : {x: DPAD.cx + KPOS[k][0], y: DPAD.cy + KPOS[k][1], z: DPAD.z});
+});
+
+function toggle(id, get) { const b = document.getElementById(id); b.onclick = () => { const o = get(); if (!o) return; o.visible = !o.visible; b.setAttribute('aria-pressed', o.visible); }; }
+toggle('tc', () => caseObj); toggle('tf', () => flipper);
+document.getElementById('vf').onclick = () => { cam.position.copy(FRONT); ctl.target.set(0, 0, 0); };
+
+function size() { const w = el.clientWidth, h = el.clientHeight; r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+new ResizeObserver(size).observe(el); size();
+(function loop(t) {
+  requestAnimationFrame(loop);
+  FZScreen.paint(sctx, sc.width, sc.height, performance.now()); tex.needsUpdate = true;
+  if (glow) glow.material.opacity = Math.max(0, 0.9 - (performance.now() - glowT) / 220);
+  ctl.update(); r.render(s, cam);
+})();
+</script>
