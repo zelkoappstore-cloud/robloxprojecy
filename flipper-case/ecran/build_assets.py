@@ -39,12 +39,20 @@ for n in sorted(os.listdir(os.path.join(A, "icons/MainMenu"))):
     frames = sorted(f for f in os.listdir(d) if f.endswith(".png"))
     rate = int(open(os.path.join(d, "frame_rate")).read().strip())
     out["icons"][n] = {"rate": rate, "frames": [png(os.path.join(d, f)) for f in frames]}
-for sub, names in {"StatusBar": ["Battery_26x8", "SDcardMounted_11x8", "Background_128x11"],
-                   "Common": ["ButtonCenter_7x7", "ButtonUp_7x4", "ButtonDown_7x4", "ButtonLeft_4x7", "ButtonRight_4x7"]}.items():
+ICONS = {"StatusBar": ["Battery_26x8", "SDcardMounted_11x8"],
+         "Common": ["ButtonCenter_7x7", "ButtonLeft_4x7", "ButtonRight_4x7", "Round_loader_8x8"],
+         "NFC": ["NFC_manual_60x50"],
+         "Dolphin": ["DolphinWait_59x54"],
+         "SubGhz": ["Scanning_short_96x52", "Internal_ant_1_9x11", "Quest_7x8"]}
+for sub, names in ICONS.items():
     for n in names:
-        p = os.path.join(A, "icons", sub, n + ".png")
-        if os.path.exists(p):
-            out["icons"][n] = {"rate": 0, "frames": [png(p)]}
+        p = os.path.join(A, "icons", sub, n)
+        if os.path.isdir(p):  # icone animee : dossier frame_XX.png + frame_rate
+            fr = sorted(f for f in os.listdir(p) if f.endswith(".png"))
+            out["icons"][n] = {"rate": int(open(os.path.join(p, "frame_rate")).read().strip()),
+                               "frames": [png(os.path.join(p, f)) for f in fr]}
+        else:
+            out["icons"][n] = {"rate": 0, "frames": [png(p + ".png")]}
 
 # helvB08 (BDF) -> FontPrimary
 def bdf(path):

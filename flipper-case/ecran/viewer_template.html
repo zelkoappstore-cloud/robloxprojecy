@@ -40,7 +40,8 @@ button.c:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 <script>
 // Reperes mesures sur le modele officiel (mm, repere du STL d'origine : -x = bord GPIO, +y = cote USB-C, +z = face ecran)
 const OFF = {x: 13.55, y: -26.144};               // translation appliquee au Flipper dans le GLB
-const SCREEN = {cx: -17.55, cy: 19.5, z: 27.24, w: 36.4, h: 21.4};
+const SCREEN = {cx: -17.55, cy: 19.5, z: 27.24, w: 35.6, h: 20.9, r: 2.0};
+const LED = {cx: -7.5, cy: 41.0, z: 27.0, r: 0.75};
 const DPAD = {cx: -17.5, cy: 51.5, rOk: 3.0, r: 10.4, z: 27.72};
 const BACK = {cx: -10.25, cy: 65.0, r: 3.4, z: 27.62};
 
@@ -56,10 +57,11 @@ const FRONT = new THREE.Vector3(0, 135, 48);
 cam.position.copy(FRONT);
 
 // Ecran : canvas 2D -> texture
-const sc = document.createElement('canvas'); sc.width = 728; sc.height = 428;
+const sc = document.createElement('canvas'); sc.width = 712; sc.height = 418;
 const sctx = sc.getContext('2d');
 const tex = new THREE.CanvasTexture(sc); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
-let flipper, caseObj, glow;
+let flipper, caseObj, glow, ledMesh, ledHalo;
+const LEDC = {cyan: 0x22e6ff, green: 0x2bff4a, yellow: 0xffd21a, magenta: 0xff3dd8};
 
 const B = Uint8Array.from(atob("/*GLB*/"), c => c.charCodeAt(0)).buffer;
 new THREE.GLTFLoader().parse(B, "", g => {
@@ -68,9 +70,22 @@ new THREE.GLTFLoader().parse(B, "", g => {
   root.position.sub(c); s.add(root);
   flipper = root.getObjectByName('flipper'); caseObj = root.getObjectByName('coque');
   // plan de l'ecran, colle sur la vitre (largeur le long de +y, haut vers -x)
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN.w, SCREEN.h), new THREE.MeshBasicMaterial({map: tex, toneMapped: false}));
+  // vitre de l'ecran : rectangle aux coins arrondis, UV calees sur le canvas
+  const {w: sw, h: sh, r: sr} = SCREEN, shp = new THREE.Shape();
+  shp.moveTo(-sw / 2 + sr, -sh / 2); shp.lineTo(sw / 2 - sr, -sh / 2); shp.quadraticCurveTo(sw / 2, -sh / 2, sw / 2, -sh / 2 + sr);
+  shp.lineTo(sw / 2, sh / 2 - sr); shp.quadraticCurveTo(sw / 2, sh / 2, sw / 2 - sr, sh / 2);
+  shp.lineTo(-sw / 2 + sr, sh / 2); shp.quadraticCurveTo(-sw / 2, sh / 2, -sw / 2, sh / 2 - sr);
+  shp.lineTo(-sw / 2, -sh / 2 + sr); shp.quadraticCurveTo(-sw / 2, -sh / 2, -sw / 2 + sr, -sh / 2);
+  const sg = new THREE.ShapeGeometry(shp, 12), pos = sg.attributes.position, uv = sg.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / sw + 0.5, pos.getY(i) / sh + 0.5);
+  const scr = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({map: tex, toneMapped: false, transparent: true}));
   scr.position.set(SCREEN.cx + OFF.x, SCREEN.cy + OFF.y, SCREEN.z); scr.rotation.z = Math.PI / 2;
   flipper.add(scr);
+  // LED de notification (pastille a cote de l'ecran)
+  ledMesh = new THREE.Mesh(new THREE.CircleGeometry(LED.r, 24), new THREE.MeshBasicMaterial({color: 0x333333}));
+  ledMesh.position.set(LED.cx + OFF.x, LED.cy + OFF.y, LED.z); flipper.add(ledMesh);
+  ledHalo = new THREE.Mesh(new THREE.CircleGeometry(LED.r * 3.2, 32), new THREE.MeshBasicMaterial({transparent: true, opacity: 0, depthWrite: false}));
+  ledHalo.position.set(LED.cx + OFF.x, LED.cy + OFF.y, LED.z + 0.05); flipper.add(ledHalo);
   glow = new THREE.Mesh(new THREE.RingGeometry(1.2, 2.6, 32), new THREE.MeshBasicMaterial({color: 0xff8200, transparent: true, opacity: 0, depthTest: false}));
   glow.renderOrder = 5; flipper.add(glow);
   document.getElementById('load').remove();
@@ -125,6 +140,11 @@ new ResizeObserver(size).observe(el); size();
 (function loop(t) {
   requestAnimationFrame(loop);
   FZScreen.paint(sctx, sc.width, sc.height, performance.now()); tex.needsUpdate = true;
+  if (ledMesh) {
+    const c = FZScreen.led(performance.now());
+    ledMesh.material.color.setHex(c ? LEDC[c] : 0x333333);
+    ledHalo.material.color.setHex(c ? LEDC[c] : 0); ledHalo.material.opacity = c ? 0.35 : 0;
+  }
   if (glow) glow.material.opacity = Math.max(0, 0.9 - (performance.now() - glowT) / 220);
   ctl.update(); r.render(s, cam);
 })();
