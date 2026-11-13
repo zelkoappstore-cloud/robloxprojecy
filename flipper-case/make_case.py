@@ -1,51 +1,69 @@
-"""Coque 3D parametrique pour Flipper Zero (100.3 x 40.1 x 25.6 mm).
-Genere flipper_zero_case.stl (impression) et flipper_zero_case_orange.glb (apercu couleur).
-Conseil : imprimer en TPU orange, face arriere sur le plateau, sans supports."""
+"""Coque 3D pour Flipper Zero, construite autour du modele officiel
+(github.com/flipperdevices/flipperzero-3d-models, GPL-3.0, copie dans reference/).
+
+Repere du modele officiel : x = largeur (-x = bord GPIO), y = longueur
+(-y = pointe IR), z = epaisseur (+z = face ecran).
+Conseil : imprimer en TPU orange, dos sur le plateau, sans supports."""
 import numpy as np, trimesh
-from manifold3d import Manifold, CrossSection
+from manifold3d import Manifold
 
-L, W, H = 100.3, 40.1, 25.6      # Flipper Zero
-CLR, WALL, BACK = 0.4, 2.0, 1.8  # jeu, epaisseur parois, epaisseur dos
-LIP = 3.0                         # rebord avant qui retient l'appareil
-R = 9.0                           # rayon des coins
-ORANGE = [255, 130, 0, 255]
+CLR, WALL, LIP = 0.3, 1.8, 2.55    # jeu, paroi, rebord avant qui retient l'appareil
+ORANGE = [1.0, 0.51, 0.0, 1.0]
 
-def rrect(l, w, r, h, z=0):
-    cs = CrossSection.square([l - 2*r, w - 2*r], center=True).offset(r, CrossSection.JoinType.Round if hasattr(CrossSection,'JoinType') else 1, circular_segments=64)
-    return Manifold.extrude(cs, h).translate([0, 0, z])
+dev = trimesh.load("reference/flipper-zero-body-3d.stl")
+(x0, y0, z0), (x1, y1, z1) = dev.bounds          # 40.1 x 100.3 x 25.6 mm
+xc = (x0 + x1) / 2
 
-def box(sx, sy, sz, cx, cy, cz):
-    return Manifold.cube([sx, sy, sz], center=True).translate([cx, cy, cz])
+hull_pts = dev.convex_hull.vertices
+sphere = trimesh.creation.icosphere(1).vertices    # 42 directions
 
-def cyl(d, h, cx, cy, cz):
-    return Manifold.cylinder(h, d/2, d/2, 64, center=True).translate([cx, cy, cz])
+def offset_hull(r):
+    pts = (hull_pts[:, None, :] + r * sphere[None, :, :]).reshape(-1, 3)
+    pts = np.unique(np.round(pts, 2), axis=0)
+    return Manifold.hull_points(pts)
 
-iL, iW = L + 2*CLR, W + 2*CLR
-oL, oW, oH = iL + 2*WALL, iW + 2*WALL, H + CLR + BACK + 1.0
+def box(xa, xb, ya, yb, za, zb):
+    return Manifold.cube([xb - xa, yb - ya, zb - za]).translate([xa, ya, za])
 
-# Coque exterieure avec bords adoucis (hull de 3 tranches)
-shell = Manifold.batch_hull([rrect(oL-2, oW-2, R, 0.01, 0),
-                             rrect(oL, oW, R+1, oH-2, 1),
-                             rrect(oL-2, oW-2, R, 0.01, oH-0.01)])
-cavity = rrect(iL, iW, R-1, H + CLR, BACK)
-front = rrect(iL - 2*LIP, iW - 2*LIP, R-3, 10, oH - 5)
-case = shell - cavity - front
+outer = offset_hull(CLR + WALL)
+cavity = offset_hull(CLR)
+# Ouverture avant : contour de la face ecran, retreci du rebord
+sec = cavity.slice(z1 - 0.4)
+from manifold3d import CrossSection, JoinType
+front = Manifold.extrude(sec.offset(-LIP, JoinType.Round), 10).translate([0, 0, z1 - 2])
+case = outer - cavity - front
 
-zc = BACK + H/2  # milieu de l'epaisseur de l'appareil
-cuts = [
-    box(54, 10, 9, 20, oW/2, BACK + H - 6),          # GPIO (bord superieur)
-    box(10, 26, 12, -oL/2, 0, zc + 2),                # fenetre IR (cote gauche)
-    box(10, 14, 8, oL/2, -4, zc),                     # USB-C (cote droit)
-    box(18, 10, 6, -28, -oW/2, zc),                   # microSD (bord inferieur)
-    cyl(10, 10, -34, 0, BACK/2),                      # trou dos (sortie / logo)
-    box(8, 4, 10, oL/2 - 6, oW/2 - 6, BACK/2),         # passage dragonne
-]
-for c in cuts:
+E = 6  # profondeur de coupe a travers la paroi
+cuts = {
+    # bord GPIO (-x) : 18 broches de y=-1.5 a 57.5, axe z=-8.3 (plan officiel 14.75 mm depuis le dos)
+    "GPIO":     box(x0 - E, x0 + 2, -4.5, 60.5, -12.0, -4.6),
+    # bord oppose (+x) : fente microSD y 47.5..59.5, z -9.5..-7.5
+    "microSD":  box(x1 - 2, x1 + E, 45.5, 61.5, -11.5, -5.5),
+    # extremite plate (+y) : USB-C x -13..-6, z -9.5..-7.5
+    "USB-C":    box(-15.0, -4.0, y1 - 2, y1 + E, -12.0, -5.0),
+    # oeillet de dragonne (coin +x/+y)
+    "dragonne": box(-1.0, x1 + E, 68.5, y1 + E, -15.0, -9.5),
+    # pointe (-y) : fenetre infrarouge, 5.7..14.1 mm depuis le dos sur le plan
+    "IR":       box(xc - 7.5, xc + 7.5, y0 - E, y0 + 7, -18.5, -6.5),
+    # dos : contact iButton (1-Wire) pres de la pointe
+    "iButton":  box(-19.0, -1.5, -21.0, -8.5, z0 - E, z0 + 1.5),
+}
+for c in cuts.values():
     case = case - c
 
-m = case.to_mesh()
-mesh = trimesh.Trimesh(m.vert_properties[:, :3], m.tri_verts)
+def tm(man):
+    m = man.to_mesh()
+    t = trimesh.Trimesh(m.vert_properties[:, :3], m.tri_verts)
+    t.merge_vertices(); return t
+
+mesh = tm(case.set_tolerance(0.01))
+mesh.apply_translation([-xc, -(y0 + y1) / 2, -z0 + CLR + WALL])   # centre, dos a z=0
 mesh.export("flipper_zero_case.stl")
-mesh.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(baseColorFactor=ORANGE, roughnessFactor=0.6))
-mesh.export("flipper_zero_case_orange.glb")
-print("watertight:", mesh.is_watertight, "dims:", np.round(mesh.extents, 1), "vol cm3:", round(mesh.volume/1000, 1))
+
+pbr = trimesh.visual.material.PBRMaterial
+mesh.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=ORANGE, roughnessFactor=0.55))
+ghost = dev.copy(); ghost.apply_translation([-xc, -(y0 + y1) / 2, -z0 + CLR + WALL])
+ghost.visual = trimesh.visual.TextureVisuals(material=pbr(baseColorFactor=[0.93, 0.93, 0.92, 1], roughnessFactor=0.7))
+trimesh.Scene({"coque": mesh}).export("flipper_zero_case_orange.glb")
+trimesh.Scene({"coque": mesh, "flipper": ghost}).export("apercu_avec_flipper.glb")
+print("etanche:", mesh.is_watertight, "dims:", np.round(mesh.extents, 1), "vol cm3:", round(mesh.volume / 1000, 1))
