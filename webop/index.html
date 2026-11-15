@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebOp — Sites web pour commerces locaux à Bruxelles</title>
-<meta name="description" content="WebOp crée des sites web modernes pour les commerces de Bruxelles : rapides, adaptés au mobile et visibles sur Google. À partir de 300 €.">
+<title>Webop — Sites web pour commerces locaux à Bruxelles</title>
+<meta name="description" content="Webop crée des sites web modernes pour les commerces de Bruxelles : rapides, adaptés au mobile et visibles sur Google. À partir de 300 €.">
 <meta name="theme-color" content="#070B16">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%233D8BFF'/%3E%3Cstop offset='1' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M7 11l3 10 3-7 3 7 3-10' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='19' r='2.4' fill='white'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%233D8BFF'/%3E%3Cstop offset='1' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M11 10l-6 6 6 6M21 10l6 6-6 6M18 8l-4 16' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
@@ -23,10 +23,8 @@ h1,h2,h3{font-family:'Plus Jakarta Sans',Inter,sans-serif;letter-spacing:-.03em;
 /* header */
 header{position:sticky;top:0;z-index:50;background:rgba(7,11,22,.72);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
 header .wrap{height:62px;display:flex;align-items:center;gap:24px}
-.logo{display:flex;align-items:center;gap:10px;font:800 19px 'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em}
-.logo i{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--a1),var(--a2));display:grid;place-items:center;box-shadow:0 4px 18px rgba(61,139,255,.35)}
-.logo i::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
-.logo b{color:var(--a1)}
+.logo{display:flex;align-items:baseline;gap:2px;font:800 19px 'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em}
+.logo .br{background:linear-gradient(100deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}
 nav{display:flex;gap:4px;margin-left:8px}
 nav a{padding:6px 12px;border-radius:8px;color:var(--mu);font-weight:500;font-size:14px;transition:.2s}
 nav a:hover{color:var(--tx);background:rgba(255,255,255,.05)}
@@ -140,7 +138,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
 
 <header>
   <div class="wrap">
-    <a href="#" class="logo"><i></i><span>Web<b>Op</b></span></a>
+    <a href="#" class="logo" aria-label="Webop"><span class="br">&lt;</span>Webop<span class="br">/&gt;</span></a>
     <nav>
       <a href="#realisations">Réalisations</a>
       <a href="#services">Services</a>
@@ -158,7 +156,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
     <div class="wrap" style="position:relative">
       <span class="rv pill"><b>Bruxelles</b>Websites for local businesses</span>
       <h1 class="rv">Ton commerce mérite<br><span class="grad">un vrai site web.</span></h1>
-      <p class="rv lede">WebOp crée des sites modernes pour les garages, restos, salons et boutiques de Bruxelles. Beaux sur mobile, visibles sur Google, et prêts à t'apporter des clients.</p>
+      <p class="rv lede">Webop crée des sites modernes pour les garages, restos, salons et boutiques de Bruxelles. Beaux sur mobile, visibles sur Google, et prêts à t'apporter des clients.</p>
       <div class="rv ctas">
         <a href="#contact" class="btn pr lg">Demander mon site →</a>
         <a href="#realisations" class="btn lg">Voir nos réalisations</a>
@@ -281,7 +279,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
 </main>
 
 <footer>
-  <div class="wrap"><span><b style="color:var(--tx)">WebOp</b> · Websites for local businesses · Bruxelles</span><span>© <span id="y">2026</span> WebOp</span></div>
+  <div class="wrap"><span><b style="color:var(--tx)">Webop</b> · Websites for local businesses · Bruxelles</span><span>© <span id="y">2026</span> Webop</span></div>
 </footer>
 
 <script>
@@ -304,7 +302,7 @@ document.getElementById('f').addEventListener('submit', e => {
   const d = new FormData(e.target), note = document.getElementById('note');
   const nom = d.get('nom').trim(), com = d.get('commerce').trim(), msg = d.get('msg').trim();
   if (!nom || !com) { note.style.color = '#F87171'; note.textContent = 'Indique ton nom et ton commerce.'; return; }
-  const txt = `Bonjour WebOp, je suis ${nom} (${com}).` + (msg ? `\n${msg}` : '');
+  const txt = `Bonjour Webop, je suis ${nom} (${com}).` + (msg ? `\n${msg}` : '');
   if (WHATSAPP) location.href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(txt)}`;
   else if (EMAIL) location.href = `mailto:${EMAIL}?subject=${encodeURIComponent('Demande de site - ' + com)}&body=${encodeURIComponent(txt)}`;
   else { note.style.color = ''; note.textContent = 'Merci ! Le contact arrive très bientôt.'; }
