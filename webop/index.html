@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebOp — Sites web pour commerces locaux à Bruxelles</title>
+<meta name="description" content="WebOp crée des sites web modernes pour les commerces de Bruxelles : rapides, adaptés au mobile et visibles sur Google. À partir de 300 €.">
+<meta name="theme-color" content="#070B16">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%233D8BFF'/%3E%3Cstop offset='1' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M7 11l3 10 3-7 3 7 3-10' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='19' r='2.4' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070B16;--bg2:#0C1222;--card:#0F172A;--line:rgba(255,255,255,.08);--tx:#E8ECF5;--mu:#8B95AD;--a1:#3D8BFF;--a2:#8B5CF6;--ok:#10B981;--r:16px;--ease:cubic-bezier(.22,1,.36,1)}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font:15px/1.6 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+h1,h2,h3{font-family:'Plus Jakarta Sans',Inter,sans-serif;letter-spacing:-.03em;line-height:1.1}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.grad{background:linear-gradient(100deg,var(--a1),var(--a2) 60%,#C084FC);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mono{font-family:'JetBrains Mono',monospace}
+/* header */
+header{position:sticky;top:0;z-index:50;background:rgba(7,11,22,.72);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+header .wrap{height:62px;display:flex;align-items:center;gap:24px}
+.logo{display:flex;align-items:center;gap:10px;font:800 19px 'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em}
+.logo i{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--a1),var(--a2));display:grid;place-items:center;box-shadow:0 4px 18px rgba(61,139,255,.35)}
+.logo i::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
+.logo b{color:var(--a1)}
+nav{display:flex;gap:4px;margin-left:8px}
+nav a{padding:6px 12px;border-radius:8px;color:var(--mu);font-weight:500;font-size:14px;transition:.2s}
+nav a:hover{color:var(--tx);background:rgba(255,255,255,.05)}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:42px;padding:0 18px;border-radius:11px;font:600 14px Inter,sans-serif;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--tx);cursor:pointer;transition:transform .3s var(--ease),box-shadow .3s,background .2s;white-space:nowrap}
+.btn:hover{transform:translateY(-2px);background:rgba(255,255,255,.08)}
+.btn.pr{background:linear-gradient(135deg,var(--a1),var(--a2));border:0;color:#fff;box-shadow:0 8px 28px -8px rgba(99,102,241,.7)}
+.btn.pr:hover{box-shadow:0 14px 36px -8px rgba(99,102,241,.85)}
+.btn.lg{height:52px;padding:0 26px;font-size:15px;border-radius:13px}
+/* hero */
+.hero{position:relative;text-align:center;padding:90px 0 40px;overflow:hidden}
+.glow{position:absolute;inset:-200px 0 auto;height:700px;pointer-events:none;background:radial-gradient(600px 340px at 30% 30%,rgba(61,139,255,.22),transparent 70%),radial-gradient(520px 320px at 72% 25%,rgba(139,92,246,.22),transparent 70%)}
+.gridbg{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse 70% 60% at 50% 20%,#000 30%,transparent 75%);opacity:.5}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:5px 14px 5px 5px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-size:13px;color:var(--mu)}
+.pill b{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;padding:2px 10px;border-radius:99px;font-size:12px}
+.hero h1{margin:26px auto 0;max-width:900px;font-size:clamp(38px,7vw,80px);font-weight:800;letter-spacing:-.05em;line-height:1}
+.lede{margin:24px auto 0;max-width:620px;color:var(--mu);font-size:clamp(16px,2vw,19px)}
+.ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+.small{margin-top:16px;color:var(--mu);font-size:13px}
+.small span{color:var(--ok)}
+/* fenêtre */
+.win{margin:60px auto 0;max-width:980px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(180deg,#111A2E,#0B1222);box-shadow:0 40px 120px -30px rgba(61,139,255,.35),0 0 0 1px rgba(255,255,255,.02) inset;text-align:left;overflow:hidden}
+.bar{display:flex;align-items:center;gap:7px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;background:#2A3350}
+.dot:nth-child(1){background:#FF5F57}.dot:nth-child(2){background:#FEBC2E}.dot:nth-child(3){background:#28C840}
+.url{margin-left:12px;flex:1;max-width:360px;padding:4px 12px;border-radius:8px;background:rgba(255,255,255,.05);font-size:11.5px;color:var(--mu)}
+.mock{padding:28px;display:grid;grid-template-columns:1.2fr 1fr;gap:28px;align-items:center}
+.mock .t{font:800 clamp(20px,3vw,32px)/1.1 'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em}
+.mock .l{height:9px;border-radius:9px;background:rgba(255,255,255,.08);margin-top:10px}
+.mock .bt{display:flex;gap:8px;margin-top:20px}
+.mock .bt i{height:32px;width:110px;border-radius:9px;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.mock .bt i+i{background:#25D366;width:90px}
+.ph{aspect-ratio:4/3;border-radius:14px;background:linear-gradient(135deg,rgba(61,139,255,.25),rgba(139,92,246,.25));border:1px solid var(--line);position:relative;overflow:hidden}
+.ph::before{content:"";position:absolute;inset:auto -20% -40% auto;width:80%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%)}
+.ph b{position:absolute;left:14px;bottom:14px;padding:6px 10px;border-radius:9px;background:rgba(7,11,22,.75);font-size:12px;font-weight:600}
+.ph b span{color:var(--ok)}
+/* sections */
+section.s{padding:110px 0 0}
+.eye{font:500 12px 'JetBrains Mono',monospace;color:var(--a1);text-transform:uppercase;letter-spacing:.12em;text-align:center}
+.h2{text-align:center;font-size:clamp(28px,4.4vw,46px);font-weight:800;margin-top:12px}
+.sub{text-align:center;color:var(--mu);max-width:560px;margin:14px auto 0}
+.cards{display:grid;gap:14px;margin-top:48px}
+.c3{grid-template-columns:repeat(3,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:24px;transition:transform .4s var(--ease),border-color .3s}
+.card:hover{transform:translateY(-4px);border-color:rgba(61,139,255,.35)}
+.card h3{font-size:18px;margin-top:14px}
+.card p{color:var(--mu);font-size:14px;margin-top:6px}
+.ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(61,139,255,.12);color:var(--a1)}
+.ic svg{width:21px;height:21px}
+.n{font:500 13px 'JetBrains Mono',monospace;color:var(--a2)}
+/* réalisations */
+.work{display:block;padding:0;overflow:hidden}
+.prev{height:190px;position:relative;padding:22px;overflow:hidden;border-bottom:1px solid var(--line)}
+.prev .pt{font:800 22px/1.1 'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em;max-width:75%}
+.prev .pl{height:7px;border-radius:7px;background:rgba(255,255,255,.14);margin-top:10px;width:60%}
+.prev .pb{display:flex;gap:6px;margin-top:16px}
+.prev .pb i{height:24px;width:80px;border-radius:7px}
+.p1{background:linear-gradient(160deg,#0A1120,#13254A)}.p1 .pt{color:#fff}.p1 .pb i{background:#1F6FEB}.p1 .pb i+i{background:#25D366;width:64px}
+.p1 .plate{position:absolute;right:18px;top:20px;background:#fff;color:#C8102E;font:700 11px 'JetBrains Mono',monospace;padding:4px 8px;border-radius:5px;border-left:6px solid #1F4BB4}
+.p2{background:linear-gradient(160deg,#FFFFFF,#F1EDFF)}.p2 .pt{color:#0B0B12}.p2 .pt span{background:linear-gradient(90deg,#8B5CF6,#22D3EE);-webkit-background-clip:text;background-clip:text;color:transparent}.p2 .pl{background:#0001}.p2 .pb i{background:#8B5CF6}.p2 .pb i+i{background:#E5E7EB}
+.p2 .kb{position:absolute;right:16px;bottom:-14px;display:flex;gap:6px}.p2 .kb i{width:46px;height:70px;border-radius:8px;background:#fff;box-shadow:0 6px 18px #0002}
+.p3{background:linear-gradient(160deg,#FFF4F1,#FFE1EA)}.p3 .pt{color:#2B1320}.p3 .pt span{color:#E5487A}.p3 .pl{background:#0001}.p3 .pb i{background:#E5487A;border-radius:99px}.p3 .pb i+i{background:#fff;border-radius:99px}
+.p3 .bub{position:absolute;right:-20px;top:-20px;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,#FFB3C8,transparent 70%)}
+.wb{padding:20px 22px 22px}
+.wb .tag{font:500 11px 'JetBrains Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
+.wb h3{margin-top:6px}
+.wb .go{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:13px;font-weight:600;color:var(--a1)}
+.work:hover .go{gap:10px}
+/* tarifs */
+.price{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:820px;margin:48px auto 0}
+.pc{position:relative;padding:30px}
+.pc.hot{border-color:rgba(139,92,246,.5);background:linear-gradient(180deg,rgba(139,92,246,.12),var(--card) 60%)}
+.pc .badge{position:absolute;top:18px;right:18px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.amt{font:800 46px/1 'Plus Jakarta Sans',sans-serif;letter-spacing:-.04em;margin-top:14px}
+.amt small{font:500 15px Inter,sans-serif;color:var(--mu);letter-spacing:0}
+.pc ul{list-style:none;margin:20px 0 24px;display:grid;gap:9px}
+.pc li{display:flex;gap:10px;font-size:14px;color:#C9D1E3}
+.pc li::before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:50%;background:rgba(16,185,129,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310B981' stroke-width='3'%3E%3Cpath d='M6 12l4 4 8-8'/%3E%3C/svg%3E") center/12px no-repeat}
+.pc .btn{width:100%}
+/* faq */
+.faq{max-width:760px;margin:44px auto 0;display:grid;gap:10px}
+details{border:1px solid var(--line);border-radius:14px;background:var(--card);padding:0 20px}
+summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:600;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--a1);font-size:20px;line-height:1;transition:transform .3s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{color:var(--mu);font-size:14px;padding-bottom:18px}
+/* contact */
+.cta{margin-top:110px;border-radius:24px;padding:48px;border:1px solid var(--line);background:radial-gradient(500px 260px at 0% 0%,rgba(61,139,255,.22),transparent 70%),radial-gradient(500px 260px at 100% 100%,rgba(139,92,246,.22),transparent 70%),var(--bg2);display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+.cta h2{font-size:clamp(28px,4vw,42px);font-weight:800}
+.cta p{color:var(--mu);margin-top:12px}
+form{display:grid;gap:10px}
+input,textarea{width:100%;padding:13px 14px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--tx);font:14px Inter,sans-serif;outline:none;transition:border-color .2s,box-shadow .2s}
+input:focus,textarea:focus{border-color:var(--a1);box-shadow:0 0 0 4px rgba(61,139,255,.15)}
+input::placeholder,textarea::placeholder{color:#5B6580}
+textarea{resize:vertical;min-height:96px}
+.note{font-size:13px;min-height:20px;color:var(--mu)}
+footer{margin-top:90px;border-top:1px solid var(--line);padding:28px 0;color:var(--mu);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+/* animation */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+/* mobile */
+@media (max-width:900px){.c3{grid-template-columns:1fr 1fr}.cta{grid-template-columns:1fr;padding:32px}}
+@media (max-width:720px){nav{display:none}.mock{grid-template-columns:1fr;padding:20px}.ph{display:none}.price{grid-template-columns:1fr}}
+@media (max-width:560px){.c3{grid-template-columns:1fr}.hero{padding-top:64px}section.s{padding-top:84px}.cta{margin-top:84px;padding:24px;border-radius:20px}header .wrap{gap:10px}header .btn{height:38px;padding:0 12px;font-size:13px}.hide-s{display:none}.ctas .btn{width:100%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a href="#" class="logo"><i></i><span>Web<b>Op</b></span></a>
+    <nav>
+      <a href="#realisations">Réalisations</a>
+      <a href="#services">Services</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="sp"></div>
+    <a href="#contact" class="btn pr">Demander mon site</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="glow"></div><div class="gridbg"></div>
+    <div class="wrap" style="position:relative">
+      <span class="rv pill"><b>Bruxelles</b>Websites for local businesses</span>
+      <h1 class="rv">Ton commerce mérite<br><span class="grad">un vrai site web.</span></h1>
+      <p class="rv lede">WebOp crée des sites modernes pour les garages, restos, salons et boutiques de Bruxelles. Beaux sur mobile, visibles sur Google, et prêts à t'apporter des clients.</p>
+      <div class="rv ctas">
+        <a href="#contact" class="btn pr lg">Demander mon site →</a>
+        <a href="#realisations" class="btn lg">Voir nos réalisations</a>
+      </div>
+      <p class="rv small"><span>●</span> Hébergement inclus · Adapté au mobile · Sans engagement</p>
+
+      <div class="rv win">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url mono">ton-commerce.be</span></div>
+        <div class="mock">
+          <div>
+            <div class="t">Le site de ton commerce,<br><span class="grad">en ligne et à jour.</span></div>
+            <div class="l" style="width:92%"></div><div class="l" style="width:74%"></div><div class="l" style="width:58%"></div>
+            <div class="bt"><i></i><i></i></div>
+          </div>
+          <div class="ph"><b><span>●</span> Nouveau message client</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="realisations">
+    <div class="wrap">
+      <div class="rv eye">Réalisations</div>
+      <h2 class="rv h2">Des sites qu'on a construits</h2>
+      <p class="rv sub">Chaque projet est fait sur mesure, avec son style et ses couleurs.</p>
+      <div class="cards c3">
+        <a class="rv card work" href="https://diagautobxl.vercel.app" target="_blank" rel="noopener">
+          <div class="prev p1"><span class="plate">BXL</span><div class="pt">Diagnostic auto à Bruxelles</div><div class="pl"></div><div class="pb"><i></i><i></i></div></div>
+          <div class="wb"><span class="tag">Garage · 5 langues</span><h3>Diag Auto BXL</h3><p>Site vitrine avec devis, bouton WhatsApp et pages de services traduites.</p><span class="go">Voir le site →</span></div>
+        </a>
+        <a class="rv card work" href="https://trakoon.vercel.app" target="_blank" rel="noopener">
+          <div class="prev p2"><div class="pt">Suis tes projets, <span>pas à pas.</span></div><div class="pl"></div><div class="pb"><i></i><i></i></div><div class="kb"><i></i><i></i><i></i></div></div>
+          <div class="wb"><span class="tag">Application web</span><h3>trakoon</h3><p>Outil de suivi de projet avec comptes, colonnes et progression en direct.</p><span class="go">Voir le site →</span></div>
+        </a>
+        <a class="rv card work" href="https://carehunter.vercel.app" target="_blank" rel="noopener">
+          <div class="prev p3"><div class="bub"></div><div class="pt">Trouve le soin <span>fait pour ta peau.</span></div><div class="pl"></div><div class="pb"><i></i><i></i></div></div>
+          <div class="wb"><span class="tag">Catalogue · Recherche</span><h3>CareHunter</h3><p>Comparateur de soins avec filtres, quiz et dictionnaire d'ingrédients.</p><span class="go">Voir le site →</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="services">
+    <div class="wrap">
+      <div class="rv eye">Services</div>
+      <h2 class="rv h2">Tout ce qu'il faut, rien de trop</h2>
+      <div class="cards c3">
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span><h3>Parfait sur mobile</h3><p>La plupart de tes clients te cherchent sur leur téléphone. Ton site s'adapte à tous les écrans.</p></div>
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><h3>Visible sur Google</h3><p>Titres, descriptions et fiche bien remplis pour apparaître quand on cherche ton métier à Bruxelles.</p></div>
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z"/></svg></span><h3>WhatsApp et devis</h3><p>Un bouton pour t'écrire en un clic et un formulaire de devis : les clients te contactent tout de suite.</p></div>
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h3>Plusieurs langues</h3><p>Français, néerlandais, anglais… pour parler à tous les clients de Bruxelles.</p></div>
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span><h3>Ultra rapide</h3><p>Hébergé sur Vercel : ton site s'ouvre en un instant, même avec une connexion moyenne.</p></div>
+        <div class="rv card"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span><h3>Modifs incluses</h3><p>Nouveaux prix, horaires, photos : tu nous envoies un message, on met à jour.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="etapes">
+    <div class="wrap">
+      <div class="rv eye">Comment ça marche</div>
+      <h2 class="rv h2">Trois étapes, zéro prise de tête</h2>
+      <div class="cards c3">
+        <div class="rv card"><span class="n">01</span><h3>On discute</h3><p>Tu nous parles de ton commerce, de tes clients et de ce que tu veux montrer.</p></div>
+        <div class="rv card"><span class="n">02</span><h3>On construit</h3><p>On crée ton site, tu le vois en ligne et tu demandes les changements que tu veux.</p></div>
+        <div class="rv card"><span class="n">03</span><h3>Tu reçois des clients</h3><p>Le site est publié, et on s'occupe de l'hébergement et des mises à jour.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="tarifs">
+    <div class="wrap">
+      <div class="rv eye">Tarifs</div>
+      <h2 class="rv h2">Des prix clairs, sans surprise</h2>
+      <div class="price">
+        <div class="rv card pc">
+          <h3>Site vitrine</h3>
+          <div class="amt">300 € <small>une seule fois</small></div>
+          <ul><li>Site sur mesure, 1 page complète</li><li>Adapté au mobile</li><li>Bouton WhatsApp et formulaire de devis</li><li>Bases pour Google</li></ul>
+          <a href="#contact" class="btn">Je veux mon site</a>
+        </div>
+        <div class="rv card pc hot">
+          <span class="badge">Recommandé</span>
+          <h3>Site + entretien</h3>
+          <div class="amt">30 € <small>/ mois</small></div>
+          <ul><li>Hébergement et sécurité</li><li>Modifications incluses chaque mois</li><li>Suivi de la visibilité sur Google</li><li>Sans engagement</li></ul>
+          <a href="#contact" class="btn pr">Choisir cette formule</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="faq">
+    <div class="wrap">
+      <div class="rv eye">FAQ</div>
+      <h2 class="rv h2">Questions fréquentes</h2>
+      <div class="faq">
+        <details class="rv"><summary>Je n'y connais rien en informatique, c'est un problème ?</summary><p>Pas du tout. Tu nous donnes tes infos et tes photos, on s'occupe de tout le reste.</p></details>
+        <details class="rv"><summary>Est-ce que je peux changer des choses après ?</summary><p>Oui. Avec la formule entretien, les modifications sont incluses : un message suffit.</p></details>
+        <details class="rv"><summary>J'ai déjà une page Facebook, pourquoi un site ?</summary><p>Un site apparaît sur Google, inspire confiance et t'appartient. Facebook ne remplace pas ça.</p></details>
+        <details class="rv"><summary>Je peux avoir mon propre nom de domaine ?</summary><p>Oui, par exemple ton-commerce.be. On le branche sur ton site.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="contact">
+    <div class="rv cta">
+      <div>
+        <h2>Prêt à avoir <span class="grad">ton site ?</span></h2>
+        <p>Dis-nous qui tu es et ce que tu fais. On te répond rapidement avec une proposition.</p>
+      </div>
+      <form id="f" novalidate>
+        <input name="nom" placeholder="Ton nom" autocomplete="name" required maxlength="60">
+        <input name="commerce" placeholder="Ton commerce (ex : boulangerie à Ixelles)" required maxlength="100">
+        <textarea name="msg" placeholder="Ce que tu veux sur ton site" maxlength="1000"></textarea>
+        <button class="btn pr lg">Envoyer ma demande</button>
+        <p class="note" id="note" role="status"></p>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap"><span><b style="color:var(--tx)">WebOp</b> · Websites for local businesses · Bruxelles</span><span>© <span id="y">2026</span> WebOp</span></div>
+</footer>
+
+<script>
+// Contact : remplir l'un des deux pour activer l'envoi.
+const WHATSAPP = ''; // ex : '32470000000'
+const EMAIL = '';    // ex : 'contact@webop.be'
+
+document.getElementById('y').textContent = new Date().getFullYear();
+
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}), { threshold: .12 });
+document.querySelectorAll('.rv').forEach((el, i) => {
+  el.style.transitionDelay = (i % 4) * 70 + 'ms';
+  io.observe(el);
+});
+
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(e.target), note = document.getElementById('note');
+  const nom = d.get('nom').trim(), com = d.get('commerce').trim(), msg = d.get('msg').trim();
+  if (!nom || !com) { note.style.color = '#F87171'; note.textContent = 'Indique ton nom et ton commerce.'; return; }
+  const txt = `Bonjour WebOp, je suis ${nom} (${com}).` + (msg ? `\n${msg}` : '');
+  if (WHATSAPP) location.href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(txt)}`;
+  else if (EMAIL) location.href = `mailto:${EMAIL}?subject=${encodeURIComponent('Demande de site - ' + com)}&body=${encodeURIComponent(txt)}`;
+  else { note.style.color = ''; note.textContent = 'Merci ! Le contact arrive très bientôt.'; }
+});
+</script>
+</body>
+</html>
