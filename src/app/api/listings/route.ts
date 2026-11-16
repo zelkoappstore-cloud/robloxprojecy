@@ -1,6 +1,5 @@
 import { db } from '@/lib/db';
 import { getUserId, json } from '@/lib/auth';
-import { BASE_SLOTS } from '@/lib/perks';
 import { CATEGORIES, isCur, isImg, toEurCents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
@@ -49,10 +48,8 @@ export async function POST(req: Request) {
   if (imgs.length > 6 || !imgs.every(i => isImg(i, 400000))) return json({ error: 'Images invalides (6 max., 400 Ko chacune)' }, 400);
   if (imgs.length && !isImg(thumb, 80000)) return json({ error: 'Miniature invalide' }, 400);
   if (RX.test(norm(title + ' ' + description))) return json({ error: 'Contenu interdit (items in-game, hacks, triche)' }, 422);
-  const u = await db.user.findUnique({ where: { id: uid }, select: { accountStatus: true, extraSlots: true } });
+  const u = await db.user.findUnique({ where: { id: uid }, select: { accountStatus: true } });
   if (!u || u.accountStatus !== 'ACTIVE') return json({ error: 'Compte non actif' }, 403);
-  const used = await db.listing.count({ where: { sellerId: uid, status: 'ACTIVE' } });
-  if (used >= BASE_SLOTS + u.extraSlots) return json({ error: 'Limite atteinte : achetez des emplacements dans la boutique' }, 403);
   const l = await db.listing.create({ data: { title: title.trim(), description: description.trim(), priceCents: cents, category, images: imgs, thumb: imgs.length ? thumb : '', sellerId: uid } });
   return json({ id: l.id }, 201);
 }

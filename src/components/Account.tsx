@@ -88,7 +88,7 @@ export default function Account({ onLogout }: { onLogout: () => void }) {
           {p.founder && <span className='inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 font-semibold text-amber-300'><Crown size={12} />Fondateur · ZLT illimités</span>}
           <span className={'rounded-full px-2.5 py-1 ' + (p.accountStatus === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300')}>{p.accountStatus === 'ACTIVE' ? 'Compte actif' : 'Compte suspendu'}</span>
           {p.emailVerified && <span className='rounded-full bg-slate-800 px-2.5 py-1 text-slate-300'>Email confirmé</span>}
-          <span className='rounded-full bg-slate-800 px-2.5 py-1 text-slate-300'>{p.listings} / {5 + p.extraSlots} annonces</span>
+          <span className='rounded-full bg-slate-800 px-2.5 py-1 text-slate-300'>{p.listings} annonce{p.listings > 1 ? 's' : ''} · illimité</span>
           {featured && <span className='inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300'><Rocket size={12} />Mise en avant active</span>}
         </div>
         <Link href={'/seller/' + p.id} className='inline-flex items-center gap-1.5 text-sm text-indigo-400 transition hover:text-indigo-300'><ExternalLink size={14} />Voir mon profil public</Link>
