@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@keyframes pop { 0% { transform: scale(.6); opacity: 0 } 70% { transform: scale(1.05) } 100% { transform: scale(1); opacity: 1 } }
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideIn { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
+.anim-pop { animation: pop .35s cubic-bezier(.2,.9,.3,1.2) both }
+.anim-fade { animation: fade .2s ease both }
+.anim-slide { animation: slideIn .25s ease both }
+
+/* ---- Thème clair : fond blanc ---- */
+html { color-scheme: light; -webkit-font-smoothing: antialiased; }
+body.bg-slate-950 { background: #fff; color: #0f172a; }
+::selection { background: #c7d2fe; color: #1e1b4b; }
+
+/* Surfaces */
+.bg-slate-950 { background-color: #fff; }
+.bg-slate-950\/90 { background-color: rgba(255,255,255,.9); }
+.bg-slate-900 { background-color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.06); }
+.bg-slate-800 { background-color: #f1f5f9; }
+.bg-slate-800\/60 { background-color: rgba(241,245,249,.8); }
+.bg-slate-700, .hover\:bg-slate-700:hover { background-color: #e2e8f0; }
+.hover\:bg-slate-800:hover { background-color: #f1f5f9; }
+.bg-black\/60 { background-color: rgba(15,23,42,.45); }
+.border-white\/10 { border-color: #e2e8f0; }
+.ring-white\/10 { --tw-ring-color: #e2e8f0; }
+
+/* Texte */
+.text-slate-100 { color: #0f172a; }
+.text-slate-300 { color: #334155; }
+.text-slate-400 { color: #475569; }
+.text-slate-500 { color: #64748b; }
+.hover\:text-slate-300:hover, .hover\:text-white:hover { color: #0f172a; }
+
+/* Couleurs d'accent lisibles sur blanc */
+.text-indigo-200 { color: #4338ca; }
+.text-indigo-400 { color: #4f46e5; }
+.hover\:text-indigo-300:hover { color: #3730a3; }
+.text-emerald-300, .text-emerald-400 { color: #047857; }
+.text-amber-300, .hover\:text-amber-300:hover { color: #b45309; }
+.text-rose-300, .text-rose-400 { color: #e11d48; }
+.hover\:text-rose-300:hover, .hover\:text-rose-400:hover { color: #be123c; }
+.text-sky-300 { color: #0369a1; }
+
+/* Boutons pleins : texte blanc */
+.bg-indigo-500, .bg-indigo-600, .bg-rose-500 { color: #fff; }
+.bg-indigo-600 { box-shadow: 0 1px 2px rgba(79,70,229,.25); }
+
+/* Champs */
+input::placeholder, textarea::placeholder { color: #94a3b8; }

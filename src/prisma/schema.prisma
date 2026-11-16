@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ListingStatus {
+  ACTIVE
+  DELETED
+}
+
+enum OrderStatus {
+  PAID
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+model User {
+  id                String         @id @default(cuid())
+  username          String         @unique
+  email             String         @unique
+  passwordHash      String
+  accountStatus     AccountStatus  @default(ACTIVE)
+  badgePro          Boolean        @default(false)
+  extraSlots        Int            @default(0)
+  featuredUntil     DateTime?
+  createdAt         DateTime       @default(now())
+  emailVerified     Boolean        @default(false)
+  usernameChangedAt DateTime?
+  bio               String         @default("")
+  emailNotifs       Boolean        @default(true)
+  allowMessages     Boolean        @default(true)
+  currency          String         @default("EUR")
+  avatar            String         @default("")
+  wallet            Wallet?
+  listings          Listing[]
+  sent              Message[]      @relation("sent")
+  received          Message[]      @relation("received")
+  buyOrders         Order[]        @relation("buyerOrders")
+  sellOrders        Order[]        @relation("sellerOrders")
+  notifications     Notification[]
+  tokens            AuthToken[]
+}
+
+model Wallet {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id])
+  zeltokenBalance Int           @default(100)
+  balanceCents    Int           @default(0)
+  purchases       Transaction[] @relation("buyer")
+  sales           Transaction[] @relation("seller")
+}
+
+model Listing {
+  id               String        @id @default(cuid())
+  title            String
+  description      String
+  priceInZeltokens Int           @default(0)
+  priceCents       Int           @default(0)
+  category         String        @default("autre")
+  images           String[]      @default([])
+  thumb            String        @default("")
+  sellerId         String
+  seller           User          @relation(fields: [sellerId], references: [id])
+  status           ListingStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  orders           Order[]
+
+  @@index([status])
+  @@index([category])
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  listingId    String
+  listing      Listing     @relation(fields: [listingId], references: [id])
+  buyerId      String
+  buyer        User        @relation("buyerOrders", fields: [buyerId], references: [id])
+  sellerId     String
+  seller       User        @relation("sellerOrders", fields: [sellerId], references: [id])
+  title        String
+  amount       Int         @default(0)
+  amountCents  Int         @default(0)
+  status       OrderStatus @default(PAID)
+  deliveryNote String?
+  createdAt    DateTime    @default(now())
+  deliveredAt  DateTime?
+  closedAt     DateTime?
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status, deliveredAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  text      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model RateLimit {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  buyerWalletId  String
+  sellerWalletId String
+  buyer          Wallet   @relation("buyer", fields: [buyerWalletId], references: [id])
+  seller         Wallet   @relation("seller", fields: [sellerWalletId], references: [id])
+  amount         Int      @default(0)
+  amountCents    Int      @default(0)
+  timestamp      DateTime @default(now())
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  sender     User     @relation("sent", fields: [senderId], references: [id])
+  receiver   User     @relation("received", fields: [receiverId], references: [id])
+  content    String
+  sentAt     DateTime @default(now())
+
+  @@index([senderId, receiverId, sentAt])
+}

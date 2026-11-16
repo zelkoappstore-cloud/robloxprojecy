@@ -1,0 +1,1 @@
+{"crons":[{"path":"/api/cron/clean-listings","schedule":"0 3 * * *"},{"path":"/api/cron/release-orders","schedule":"0 4 * * *"}]}
