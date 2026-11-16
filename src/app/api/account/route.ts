@@ -11,7 +11,7 @@ export async function GET() {
   if (!uid) return json({ error: 'Non authentifié' }, 401);
   const u = await db.user.findUnique({
     where: { id: uid },
-    select: { id: true, username: true, email: true, accountStatus: true, badgePro: true, extraSlots: true, featuredUntil: true, createdAt: true, emailVerified: true, usernameChangedAt: true, bio: true, emailNotifs: true, allowMessages: true, currency: true, avatar: true },
+    select: { id: true, username: true, email: true, accountStatus: true, badgePro: true, extraSlots: true, featuredUntil: true, createdAt: true, emailVerified: true, usernameChangedAt: true, bio: true, emailNotifs: true, allowMessages: true, currency: true, avatar: true, founder: true },
   });
   if (!u) return json({ error: 'Introuvable' }, 404);
   const listings = await db.listing.count({ where: { sellerId: uid, status: 'ACTIVE' } });

@@ -42,6 +42,7 @@ model User {
   allowMessages     Boolean        @default(true)
   currency          String         @default("EUR")
   avatar            String         @default("")
+  founder           Boolean        @default(false)
   wallet            Wallet?
   listings          Listing[]
   sent              Message[]      @relation("sent")

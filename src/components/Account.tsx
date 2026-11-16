@@ -2,12 +2,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRef } from 'react';
-import { User, KeyRound, LogOut, Loader2, CheckCircle2, AlertCircle, BadgeCheck, Rocket, FileText, SlidersHorizontal, ExternalLink, Camera, Trash2, Banknote } from 'lucide-react';
+import { Crown, User, KeyRound, LogOut, Loader2, CheckCircle2, AlertCircle, BadgeCheck, Rocket, FileText, SlidersHorizontal, ExternalLink, Camera, Trash2, Banknote } from 'lucide-react';
 import { CURRENCIES } from '@/lib/money';
 import { accountChanged } from '@/lib/cur';
 import { shrink } from '@/lib/img';
 
-type P = { id: string; username: string; email: string; accountStatus: string; badgePro: boolean; featuredUntil: string | null; listings: number; extraSlots: number; createdAt: string; emailVerified: boolean; bio: string; emailNotifs: boolean; allowMessages: boolean; currency: string; avatar: string; nextUsernameChange: string | null };
+type P = { id: string; username: string; email: string; accountStatus: string; badgePro: boolean; featuredUntil: string | null; listings: number; extraSlots: number; createdAt: string; emailVerified: boolean; bio: string; emailNotifs: boolean; allowMessages: boolean; currency: string; avatar: string; founder: boolean; nextUsernameChange: string | null };
 type Msg = { ok: boolean; t: string } | null;
 
 const Toggle = ({ on, onClick, label, hint }: { on: boolean; onClick: () => void; label: string; hint: string }) => (
@@ -85,6 +85,7 @@ export default function Account({ onLogout }: { onLogout: () => void }) {
         </div>
         <Note k='a' />
         <div className='flex flex-wrap gap-2 pt-1 text-xs'>
+          {p.founder && <span className='inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 font-semibold text-amber-300'><Crown size={12} />Fondateur · ZLT illimités</span>}
           <span className={'rounded-full px-2.5 py-1 ' + (p.accountStatus === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300')}>{p.accountStatus === 'ACTIVE' ? 'Compte actif' : 'Compte suspendu'}</span>
           {p.emailVerified && <span className='rounded-full bg-slate-800 px-2.5 py-1 text-slate-300'>Email confirmé</span>}
           <span className='rounded-full bg-slate-800 px-2.5 py-1 text-slate-300'>{p.listings} / {5 + p.extraSlots} annonces</span>

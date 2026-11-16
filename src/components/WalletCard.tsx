@@ -28,12 +28,13 @@ export default function WalletCard() {
   const [balance, setBalance] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [zlt, setZlt] = useState<number | null>(null);
+  const [inf, setInf] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const shown = useCountUp(balance);
   const f = useFmt();
 
-  useEffect(() => { fetch('/api/wallet/balance').then(r => r.json()).then(d => { setBalance(d.cents ?? 0); setZlt(d.balance ?? 0); }); }, []);
+  useEffect(() => { fetch('/api/wallet/balance').then(r => r.json()).then(d => { setBalance(d.cents ?? 0); setZlt(d.balance ?? 0); setInf(!!d.unlimited); }); }, []);
 
   async function deposit(pack: number) {
     setBusy(pack); setErr('');
@@ -58,7 +59,7 @@ export default function WalletCard() {
           ? <div className='h-9 w-40 animate-pulse rounded-lg bg-slate-800' />
           : <span className='text-4xl font-bold tabular-nums'>{f(shown)}</span>}
       </div>
-      <p className='mt-1 flex items-center gap-1.5 text-sm text-slate-400'><Coins size={14} className='text-amber-300' />{zlt === null ? '…' : zlt.toLocaleString('fr-FR')} ZLT <span className='text-xs text-slate-500'>(pour la boutique d’avantages)</span></p>
+      <p className='mt-1 flex items-center gap-1.5 text-sm text-slate-400'><Coins size={14} className='text-amber-300' />{zlt === null ? '…' : inf ? '∞' : zlt.toLocaleString('fr-FR')} ZLT <span className='text-xs text-slate-500'>{inf ? '(illimité, compte Fondateur)' : '(pour la boutique d’avantages)'}</span></p>
       <div className='mt-5 grid grid-cols-2 gap-3'>
         {PACKS.map(p => (
           <button key={p} onClick={() => deposit(p)} disabled={busy !== null}

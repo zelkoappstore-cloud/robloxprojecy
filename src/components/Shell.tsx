@@ -19,6 +19,7 @@ export default function Shell({ active, onSelect, children }: { active?: string;
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [bal, setBal] = useState<number | null>(null);
   const [zlt, setZlt] = useState<number | null>(null);
+  const [inf, setInf] = useState(false);
   const [unread, setUnread] = useState(0);
 
   const loadMe = () => fetch('/api/account').then(r => r.ok ? r.json() : null).then(d => setMe(d ? { id: d.id, username: d.username, currency: d.currency ?? 'EUR', avatar: d.avatar ?? '' } : null)).catch(() => setMe(null));
@@ -30,7 +31,7 @@ export default function Shell({ active, onSelect, children }: { active?: string;
   useEffect(() => {
     if (!me) return;
     const poll = () => {
-      fetch('/api/wallet/balance').then(r => r.json()).then(d => { if (typeof d.cents === 'number') setBal(d.cents); if (typeof d.balance === 'number') setZlt(d.balance); }).catch(() => {});
+      fetch('/api/wallet/balance').then(r => r.json()).then(d => { if (typeof d.cents === 'number') setBal(d.cents); if (typeof d.balance === 'number') setZlt(d.balance); setInf(!!d.unlimited); }).catch(() => {});
       fetch('/api/notifications?summary=1').then(r => r.json()).then(d => { if (typeof d.unread === 'number') setUnread(d.unread); }).catch(() => {});
     };
     poll();
@@ -60,7 +61,7 @@ export default function Shell({ active, onSelect, children }: { active?: string;
           <button onClick={() => go('wallet')} className='flex h-9 items-center gap-2 rounded-full bg-slate-900 px-3.5 text-sm ring-1 ring-white/10 transition hover:bg-slate-800 active:scale-95'>
             <Wallet size={14} className='text-indigo-400' />
             {bal === null ? <span className='h-4 w-12 animate-pulse rounded bg-slate-800' /> : <span key={bal} className='anim-pop font-semibold tabular-nums'>{fmt(bal, me.currency)}</span>}
-            {zlt !== null && <span className='hidden text-xs text-slate-500 sm:inline'>· {zlt.toLocaleString('fr-FR')} ZLT</span>}
+            {zlt !== null && <span className='hidden text-xs text-slate-500 sm:inline'>· {inf ? '∞' : zlt.toLocaleString('fr-FR')} ZLT</span>}
           </button>
           <button onClick={() => go('account')} aria-label='Mon compte' className='h-9 w-9 overflow-hidden rounded-full bg-indigo-600 text-sm font-bold uppercase ring-1 ring-white/10 transition active:scale-90'>
             {me.avatar ? <img src={me.avatar} alt='' className='h-full w-full object-cover' /> : me.username.charAt(0)}

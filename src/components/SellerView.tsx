@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BadgeCheck, MessageCircle, X, UserX, PackageOpen } from 'lucide-react';
+import { Crown, ArrowLeft, BadgeCheck, MessageCircle, X, UserX, PackageOpen } from 'lucide-react';
 import ChatBox from './ChatBox';
 import { useFmt } from '@/lib/cur';
 
 type D = {
-  seller: { id: string; username: string; badge: boolean; avatar: string; bio: string; since: string; sales: number };
+  seller: { id: string; username: string; badge: boolean; avatar: string; founder: boolean; bio: string; since: string; sales: number };
   listings: { id: string; title: string; description: string; price: number; thumb: string }[];
 };
 
@@ -30,7 +30,7 @@ export default function SellerView({ id, meId }: { id: string; meId: string }) {
       <div className='flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-900 p-6 sm:flex-row sm:items-center'>
         <div className='flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-2xl font-bold uppercase'>{s.avatar ? <img src={s.avatar} alt='' className='h-full w-full object-cover' /> : s.username.charAt(0)}</div>
         <div className='min-w-0 flex-1'>
-          <p className='flex items-center gap-2 text-xl font-bold'>{s.username}{s.badge && <BadgeCheck size={20} className='text-indigo-400' />}</p>
+          <p className='flex items-center gap-2 text-xl font-bold'>{s.username}{s.badge && <BadgeCheck size={20} className='text-indigo-400' />}{s.founder && <span className='inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-300'><Crown size={12} />Fondateur</span>}</p>
           <p className='text-sm text-slate-400'>{s.sales} vente{s.sales > 1 ? 's' : ''} terminée{s.sales > 1 ? 's' : ''} · membre depuis {new Date(s.since).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</p>
           {s.bio && <p className='mt-2 text-sm text-slate-300'>{s.bio}</p>}
         </div>

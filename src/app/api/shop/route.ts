@@ -28,16 +28,18 @@ export async function POST(req: Request) {
       const u = await t.user.findUnique({ where: { id: uid }, include: { wallet: true } });
       if (!u?.wallet || u.accountStatus !== 'ACTIVE') throw new Error('ACCOUNT');
       if (perk.key === 'BADGE_PRO' && u.badgePro) throw new Error('OWNED');
-      const d = await t.wallet.updateMany({
-        where: { id: u.wallet.id, zeltokenBalance: { gte: perk.price } },
-        data: { zeltokenBalance: { decrement: perk.price } },
-      });
-      if (d.count !== 1) throw new Error('FUNDS');
+      if (!u.founder) {
+        const d = await t.wallet.updateMany({
+          where: { id: u.wallet.id, zeltokenBalance: { gte: perk.price } },
+          data: { zeltokenBalance: { decrement: perk.price } },
+        });
+        if (d.count !== 1) throw new Error('FUNDS');
+      }
       const data = perk.key === 'BADGE_PRO' ? { badgePro: true }
         : perk.key === 'EXTRA_SLOTS' ? { extraSlots: { increment: 10 } }
         : { featuredUntil: new Date(Math.max(Date.now(), u.featuredUntil?.getTime() ?? 0) + 7 * 86400000) };
       await t.user.update({ where: { id: uid }, data });
-      return u.wallet.zeltokenBalance - perk.price;
+      return u.founder ? u.wallet.zeltokenBalance : u.wallet.zeltokenBalance - perk.price;
     });
     return json({ ok: true, balance });
   } catch (e: any) {
