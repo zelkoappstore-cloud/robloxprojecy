@@ -2,10 +2,10 @@ import { OrderStatus, Prisma } from '@prisma/client';
 
 type Tx = Prisma.TransactionClient;
 
-export async function complete(t: Tx, id: string): Promise<boolean> {
+export async function complete(t: Tx, id: string, from: OrderStatus[] = ['DELIVERED']): Promise<boolean> {
   const o = await t.order.findUnique({ where: { id } });
   if (!o) return false;
-  const u = await t.order.updateMany({ where: { id, status: 'DELIVERED' }, data: { status: 'COMPLETED', closedAt: new Date() } });
+  const u = await t.order.updateMany({ where: { id, status: { in: from } }, data: { status: 'COMPLETED', closedAt: new Date() } });
   if (u.count !== 1) return false;
   const bw = await t.wallet.findUnique({ where: { userId: o.buyerId } });
   const sw = await t.wallet.findUnique({ where: { userId: o.sellerId } });
