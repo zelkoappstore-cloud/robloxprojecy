@@ -168,6 +168,7 @@ function Dashboard({ onExit }: { onExit: () => void }) {
     if (ok) load(); else if (!d.error) onExit();
   }
   async function logout() { await call('/api/admin/auth', 'DELETE'); onExit(); }
+  const ready = data !== null && (tab === 'stats' ? typeof data.users === 'number' : Array.isArray(data.items));
 
   const small = (tone: string) => 'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:opacity-50 ' + tone;
   const danger = small('bg-rose-500/15 text-rose-300 hover:bg-rose-500/25');
@@ -184,7 +185,7 @@ function Dashboard({ onExit }: { onExit: () => void }) {
       </header>
       <nav className='-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0'>
         {TABS.map(({ id, label, Icon }) => (
-          <button key={id} onClick={() => { setTab(id); setQ(''); setMsg(null); }} className={'flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm transition ' + (tab === id ? 'bg-indigo-600 font-medium' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')}>
+          <button key={id} onClick={() => { if (id !== tab) setData(null); setTab(id); setQ(''); setMsg(null); }} className={'flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm transition ' + (tab === id ? 'bg-indigo-600 font-medium' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')}>
             <Icon size={16} />{label}
           </button>
         ))}
@@ -199,7 +200,7 @@ function Dashboard({ onExit }: { onExit: () => void }) {
           {tab === 'listings' && <button onClick={() => setDeleted(!deleted)} className={'rounded-xl px-3 py-2.5 text-sm ' + (deleted ? 'bg-indigo-600' : 'bg-slate-800 text-slate-300')}>{deleted ? 'Supprimées' : 'Actives'}</button>}
         </div>
       )}
-      {data === null ? <div className='h-40 animate-pulse rounded-2xl bg-slate-900' /> : (
+      {!ready ? <div className='h-40 animate-pulse rounded-2xl bg-slate-900' /> : (
         <section className='anim-fade space-y-3'>
           {tab === 'stats' && (
             <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
