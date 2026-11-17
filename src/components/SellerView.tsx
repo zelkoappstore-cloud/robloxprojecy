@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { Crown, ArrowLeft, BadgeCheck, MessageCircle, X, UserX, PackageOpen } from 'lucide-react';
 import ChatBox from './ChatBox';
 import { useFmt } from '@/lib/cur';
+import { Rating, Stars } from './Stars';
 
 type D = {
-  seller: { id: string; username: string; badge: boolean; avatar: string; founder: boolean; bio: string; since: string; sales: number };
+  seller: { id: string; username: string; badge: boolean; avatar: string; founder: boolean; bio: string; since: string; sales: number; rating: { avg: number | null; count: number } };
+  reviews: { id: string; rating: number; comment: string; at: string; title: string; buyer: string }[];
   listings: { id: string; title: string; description: string; price: number; thumb: string }[];
 };
 
@@ -23,7 +25,7 @@ export default function SellerView({ id, meId }: { id: string; meId: string }) {
       <div className='anim-fade flex flex-col items-center gap-2 rounded-2xl border border-dashed border-white/10 py-16 text-slate-500'><UserX size={36} /><p>Profil introuvable</p></div>
     </div>
   );
-  const { seller: s, listings } = d;
+  const { seller: s, listings, reviews } = d;
   return (
     <div className='anim-slide space-y-5'>
       {back}
@@ -32,6 +34,7 @@ export default function SellerView({ id, meId }: { id: string; meId: string }) {
         <div className='min-w-0 flex-1'>
           <p className='flex items-center gap-2 text-xl font-bold'>{s.username}{s.badge && <BadgeCheck size={20} className='text-indigo-400' />}{s.founder && <span className='inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-300'><Crown size={12} />Fondateur</span>}</p>
           <p className='text-sm text-slate-400'>{s.sales} vente{s.sales > 1 ? 's' : ''} terminée{s.sales > 1 ? 's' : ''} · membre depuis {new Date(s.since).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</p>
+          <p className='mt-1'><Rating r={s.rating} /></p>
           {s.bio && <p className='mt-2 text-sm text-slate-300'>{s.bio}</p>}
         </div>
         {s.id !== meId && <button onClick={() => setChat(true)} className='flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium transition hover:bg-indigo-500 active:scale-95'><MessageCircle size={16} />Contacter</button>}
@@ -52,6 +55,20 @@ export default function SellerView({ id, meId }: { id: string; meId: string }) {
             </Link>
           ))}
         </div>
+      )}
+      {reviews.length > 0 && (
+        <>
+          <h2 className='font-semibold'>Avis ({reviews.length})</h2>
+          <div className='space-y-2'>
+            {reviews.map(r => (
+              <div key={r.id} className='rounded-2xl border border-white/10 bg-slate-900 p-4'>
+                <div className='flex items-center justify-between gap-2'><Stars value={r.rating} /><span className='text-xs text-slate-500'>{new Date(r.at).toLocaleDateString('fr-FR')}</span></div>
+                {r.comment && <p className='mt-2 text-sm text-slate-300'>{r.comment}</p>}
+                <p className='mt-1 text-xs text-slate-500'>{r.buyer} · {r.title}</p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       {chat && (
         <div className='anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4' onClick={() => setChat(false)}>

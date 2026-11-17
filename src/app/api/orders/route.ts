@@ -12,12 +12,12 @@ export async function GET() {
   const rows = await db.order.findMany({
     where: { OR: [{ buyerId: uid }, { sellerId: uid }] },
     orderBy: { createdAt: 'desc' }, take: 100,
-    include: { buyer: { select: { id: true, username: true } }, seller: { select: { id: true, username: true } } },
+    include: { buyer: { select: { id: true, username: true } }, seller: { select: { id: true, username: true } }, review: { select: { rating: true } } },
   });
   const items = rows.map(o => {
     const isBuyer = o.buyerId === uid;
     const peer = isBuyer ? o.seller : o.buyer;
-    return { id: o.id, title: o.title, amount: o.amount, amountCents: o.amountCents, status: o.status, deliveryNote: o.deliveryNote, createdAt: o.createdAt, role: isBuyer ? 'buyer' : 'seller', peerId: peer.id, peerName: peer.username };
+    return { id: o.id, title: o.title, amount: o.amount, amountCents: o.amountCents, status: o.status, deliveryNote: o.deliveryNote, createdAt: o.createdAt, role: isBuyer ? 'buyer' : 'seller', peerId: peer.id, peerName: peer.username, review: o.review?.rating ?? null };
   });
   return json({ items });
 }

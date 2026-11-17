@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { getUserId, json } from '@/lib/auth';
 import { notify } from '@/lib/notify';
+import { checkMessage } from '@/lib/rules';
 
 export async function POST(req: Request) {
   const uid = await getUserId();
@@ -8,6 +9,8 @@ export async function POST(req: Request) {
   const { receiverId, content } = await req.json().catch(() => ({}));
   if (typeof receiverId !== 'string' || receiverId === uid || typeof content !== 'string' || !content.trim() || content.length > 2000)
     return json({ error: 'Données invalides' }, 400);
+  const bad = checkMessage(content);
+  if (bad) return json({ error: bad }, 422);
   const me = await db.user.findUnique({ where: { id: uid }, select: { username: true, accountStatus: true } });
   if (!me || me.accountStatus !== 'ACTIVE') return json({ error: 'Compte non actif' }, 403);
   const rcv = await db.user.findUnique({ where: { id: receiverId }, select: { allowMessages: true } });

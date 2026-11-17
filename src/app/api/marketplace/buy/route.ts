@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       const buyer = await t.user.findUnique({ where: { id: uid }, include: { wallet: true } });
       if (!buyer?.wallet || buyer.accountStatus !== 'ACTIVE' || !buyer.emailVerified) throw new Error('ACCOUNT');
       const l = await t.listing.findUnique({ where: { id: listingId }, include: { seller: { select: { accountStatus: true } } } });
-      if (!l || l.status !== 'ACTIVE' || l.seller.accountStatus !== 'ACTIVE') throw new Error('LISTING');
+      if (!l || l.status !== 'ACTIVE' || l.hidden || l.seller.accountStatus !== 'ACTIVE') throw new Error('LISTING');
       if (l.sellerId === uid) throw new Error('SELF');
       if (l.priceCents < 1) throw new Error('LISTING');
       const d = await t.wallet.updateMany({

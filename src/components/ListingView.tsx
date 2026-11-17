@@ -6,10 +6,12 @@ import BuyButton from './BuyButton';
 import ChatBox from './ChatBox';
 import { catLabel } from '@/lib/money';
 import { useFmt } from '@/lib/cur';
+import ReportButton from './ReportButton';
+import { Rating } from './Stars';
 
 type D = {
   listing: { id: string; title: string; description: string; price: number; category: string; images: string[]; createdAt: string };
-  seller: { id: string; username: string; badge: boolean; avatar: string; since: string; sales: number };
+  seller: { id: string; username: string; badge: boolean; avatar: string; since: string; sales: number; rating: { avg: number | null; count: number } };
 };
 
 export default function ListingView({ id, meId }: { id: string; meId: string }) {
@@ -65,8 +67,10 @@ export default function ListingView({ id, meId }: { id: string; meId: string }) 
           </div>
           <Link href={'/seller/' + s.id} className='block rounded-2xl border border-white/10 bg-slate-900 p-5 transition hover:border-indigo-500/50'>
             <p className='flex items-center gap-2 font-semibold'>{s.avatar ? <img src={s.avatar} alt='' className='h-8 w-8 rounded-full object-cover' /> : <span className='flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-sm uppercase'>{s.username.charAt(0)}</span>}{s.username}{s.badge && <BadgeCheck size={16} className='text-indigo-400' />}</p>
+            <p className='mt-2'><Rating r={s.rating} /></p>
             <p className='mt-1 text-xs text-slate-400'>{s.sales} vente{s.sales > 1 ? 's' : ''} · membre depuis {new Date(s.since).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}</p>
           </Link>
+          {!own && <div className='px-1'><ReportButton listingId={l.id} /></div>}
         </div>
       </div>
       {chat && (

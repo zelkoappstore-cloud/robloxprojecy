@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { PackageOpen, Loader2, Truck, CheckCircle2, XCircle, AlertTriangle, MessageCircle, X, Clock } from 'lucide-react';
 import { useFmt } from '@/lib/cur';
 import ChatBox from './ChatBox';
+import { StarPicker, Stars } from './Stars';
 
 type St = 'PAID' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
-type O = { id: string; title: string; amount: number; amountCents: number; status: St; deliveryNote: string | null; createdAt: string; role: 'buyer' | 'seller'; peerId: string; peerName: string };
+type O = { id: string; title: string; amount: number; amountCents: number; status: St; deliveryNote: string | null; createdAt: string; role: 'buyer' | 'seller'; peerId: string; peerName: string; review: number | null };
 
 const LABEL: Record<St, [string, string]> = {
   PAID: ['En attente de livraison', 'bg-amber-500/15 text-amber-300'],
@@ -25,6 +26,7 @@ export default function Orders({ meId }: { meId: string }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
   const [chat, setChat] = useState<O | null>(null);
+  const [rev, setRev] = useState<Record<string, { r: number; c: string }>>({});
 
   const load = () => fetch('/api/orders').then(r => r.json()).then(d => setItems(d.items ?? [])).catch(() => setItems([]));
   useEffect(() => { load(); const i = setInterval(load, 10000); return () => clearInterval(i); }, []);
@@ -32,6 +34,16 @@ export default function Orders({ meId }: { meId: string }) {
   async function act(id: string, action: string) {
     setBusy(id + action); setErr('');
     const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action, note: notes[id] }) });
+    const d = await r.json().catch(() => ({}));
+    setBusy('');
+    if (!r.ok) setErr(d.error ?? 'Erreur serveur');
+    load();
+  }
+  async function review(o: O) {
+    const v = rev[o.id];
+    if (!v?.r) return;
+    setBusy(o.id + 'REVIEW'); setErr('');
+    const r = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: o.id, rating: v.r, comment: v.c }) });
     const d = await r.json().catch(() => ({}));
     setBusy('');
     if (!r.ok) setErr(d.error ?? 'Erreur serveur');
@@ -78,6 +90,19 @@ export default function Orders({ meId }: { meId: string }) {
                 {STEPS.map((s, k) => <span key={s} className={'h-1.5 flex-1 rounded-full transition-colors duration-500 ' + (k <= idx ? 'bg-indigo-500' : 'bg-slate-800')} />)}
               </div>
             )}
+            {!seller && o.status === 'COMPLETED' && (o.review ? (
+              <p className='flex items-center gap-2 text-xs text-slate-500'>Votre avis : <Stars value={o.review} /></p>
+            ) : (
+              <div className='space-y-2 rounded-xl bg-amber-500/10 p-3'>
+                <p className='text-sm font-medium'>Notez {o.peerName}</p>
+                <StarPicker value={rev[o.id]?.r ?? 0} onChange={n => setRev({ ...rev, [o.id]: { r: n, c: rev[o.id]?.c ?? '' } })} />
+                <textarea value={rev[o.id]?.c ?? ''} onChange={e => setRev({ ...rev, [o.id]: { r: rev[o.id]?.r ?? 0, c: e.target.value } })} maxLength={500} placeholder='Votre avis (facultatif)'
+                  className='h-16 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500' />
+                <button onClick={() => review(o)} disabled={!rev[o.id]?.r || !!busy} className='flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-medium transition hover:bg-indigo-500 active:scale-95 disabled:opacity-50'>
+                  {busy === o.id + 'REVIEW' ? <Loader2 size={16} className='animate-spin' /> : 'Publier l’avis'}
+                </button>
+              </div>
+            ))}
             {o.deliveryNote && !seller && <p className='rounded-xl bg-slate-800 p-3 text-sm text-slate-300'>{o.deliveryNote}</p>}
             {seller && o.status === 'PAID' && (
               <textarea value={notes[o.id] ?? ''} onChange={e => setNotes({ ...notes, [o.id]: e.target.value })} maxLength={1000} placeholder='Message de livraison (instructions, code…)'

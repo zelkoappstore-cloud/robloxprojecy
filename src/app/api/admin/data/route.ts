@@ -18,13 +18,14 @@ export async function GET(req: Request) {
 
   if (view === 'stats') {
     const day = new Date(Date.now() - 86400000);
-    const [users, users24, listings, listings24, orders, disputes, suspended] = await Promise.all([
+    const [users, users24, listings, listings24, orders, disputes, suspended, reports] = await Promise.all([
       db.user.count(), db.user.count({ where: { createdAt: { gt: day } } }),
       db.listing.count({ where: { status: 'ACTIVE' } }), db.listing.count({ where: { createdAt: { gt: day } } }),
       db.order.count(), db.order.count({ where: { status: 'DISPUTED' } }),
       db.user.count({ where: { accountStatus: 'SUSPENDED' } }),
+      db.report.count({ where: { resolved: false } }),
     ]);
-    return json({ users, users24, listings, listings24, orders, disputes, suspended, expiresAt: a.session.expiresAt });
+    return json({ users, users24, listings, listings24, orders, disputes, suspended, reports, expiresAt: a.session.expiresAt });
   }
 
   if (view === 'listings') {
@@ -43,6 +44,15 @@ export async function GET(req: Request) {
   if (view === 'disputes') {
     const rows = await db.order.findMany({ where: { status: 'DISPUTED' }, orderBy: { createdAt: 'desc' }, take: 50, include: { buyer: { select: { id: true, username: true } }, seller: { select: { id: true, username: true } } } });
     return json({ items: rows.map(o => ({ id: o.id, title: o.title, amountCents: o.amountCents, amount: o.amount, deliveryNote: o.deliveryNote, createdAt: o.createdAt, deliveredAt: o.deliveredAt, buyer: o.buyer, seller: o.seller })) });
+  }
+
+  if (view === 'reports') {
+    const rows = await db.listing.findMany({
+      where: { reports: { some: { resolved: false } } }, take: 50,
+      select: { id: true, title: true, description: true, priceCents: true, thumb: true, hidden: true, status: true, seller: { select: { id: true, username: true } }, reports: { where: { resolved: false }, orderBy: { createdAt: 'desc' }, select: { id: true, reason: true, detail: true, createdAt: true } } },
+    });
+    rows.sort((a, b) => b.reports.length - a.reports.length);
+    return json({ items: rows });
   }
 
   if (view === 'logs') {
@@ -64,9 +74,22 @@ export async function POST(req: Request) {
     const del = action === 'deleteListing';
     const l = await db.listing.findUnique({ where: { id } });
     if (!l) return json({ error: 'Annonce introuvable' }, 404);
-    await db.listing.update({ where: { id }, data: { status: del ? 'DELETED' : 'ACTIVE' } });
+    await db.listing.update({ where: { id }, data: { status: del ? 'DELETED' : 'ACTIVE', hidden: false } });
+    await db.report.updateMany({ where: { listingId: id, resolved: false }, data: { resolved: true } });
     if (del) await notify(l.sellerId, 'ADMIN', 'Votre annonce « ' + l.title + ' » a été retirée par la modération' + (why ? ' : ' + why : '.'), '/?tab=sell');
     await audit(req, a.user.id, del ? 'LISTING_DELETE' : 'LISTING_RESTORE', id, l.title + (why ? ' | ' + why : ''));
+    return json({ ok: true });
+  }
+
+  if (action === 'dismissReports') {
+    const l = await db.listing.findUnique({ where: { id } });
+    if (!l) return json({ error: 'Annonce introuvable' }, 404);
+    await db.report.updateMany({ where: { listingId: id, resolved: false }, data: { resolved: true } });
+    if (l.hidden) {
+      await db.listing.update({ where: { id }, data: { hidden: false } });
+      await notify(l.sellerId, 'ADMIN', 'Votre annonce « ' + l.title + ' » a été vérifiée et remise en ligne.', '/listing/' + id);
+    }
+    await audit(req, a.user.id, 'REPORTS_DISMISS', id, l.title + (why ? ' | ' + why : ''));
     return json({ ok: true });
   }
 

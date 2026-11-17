@@ -5,7 +5,7 @@ import { CATEGORIES, CURRENCIES, catLabel } from '@/lib/money';
 import { useCur, useFmt } from '@/lib/cur';
 import { shrink } from '@/lib/img';
 
-type M = { id: string; title: string; price: number; category: string; thumb: string };
+type M = { id: string; title: string; price: number; category: string; thumb: string; hidden: boolean };
 const EMPTY = { title: '', description: '', price: '', category: '' };
 
 export default function SellForm() {
@@ -92,6 +92,7 @@ export default function SellForm() {
           <span className='absolute right-3 top-2.5 text-sm font-medium text-slate-400'>{sym}</span>
         </div>
         <p className='text-xs text-slate-500'>Les acheteurs paient en argent. Le prix s’affiche dans la devise de chacun (modifiable dans Compte).</p>
+        <p className='text-xs text-slate-500'>Interdit : armes, drogues, contrefaçons, contenus adultes, comptes ou données, triche, et toute coordonnée (téléphone, email, lien, PayPal, WhatsApp…). Les annonces signalées sont masquées puis vérifiées.</p>
         {msg && (
           <p className={'anim-fade flex items-center gap-2 text-sm ' + (msg.ok ? 'text-emerald-400' : 'text-rose-400')}>
             {msg.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}{msg.t}
@@ -108,7 +109,7 @@ export default function SellForm() {
         ) : mine.map(m => (
           <div key={m.id} className='anim-slide flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900 p-2 pr-3'>
             {m.thumb ? <img src={m.thumb} alt='' className='h-12 w-12 shrink-0 rounded-lg object-cover' /> : <div className='h-12 w-12 shrink-0 rounded-lg bg-slate-800' />}
-            <div className='min-w-0 flex-1'><p className='truncate font-medium'>{m.title}</p><p className='text-xs text-slate-500'>{m.price ? f$(m.price) : 'Sans prix'} · {catLabel(m.category)}</p></div>
+            <div className='min-w-0 flex-1'><p className='truncate font-medium'>{m.title}</p><p className='text-xs text-slate-500'>{m.price ? f$(m.price) : 'Sans prix'} · {catLabel(m.category)}</p>{m.hidden && <p className='text-xs font-medium text-rose-400'>Masquée : en cours de vérification</p>}</div>
             <button onClick={() => del(m.id)} className='rounded-lg p-2 text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-400 active:scale-90' aria-label='Supprimer'><Trash2 size={18} /></button>
           </div>
         ))}

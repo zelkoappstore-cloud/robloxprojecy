@@ -1,10 +1,10 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, Loader2, LogOut, Users, Package, AlertTriangle, ScrollText, LayoutDashboard, Search, Trash2, RotateCcw, Ban, CheckCircle2, KeyRound, Smartphone, Copy, Lock } from 'lucide-react';
+import { Flag, ShieldCheck, Loader2, LogOut, Users, Package, AlertTriangle, ScrollText, LayoutDashboard, Search, Trash2, RotateCcw, Ban, CheckCircle2, KeyRound, Smartphone, Copy, Lock } from 'lucide-react';
 import { fmt, catLabel } from '@/lib/money';
 
 type Status = { totp: boolean; open: boolean; expiresAt: string | null; username: string };
-type Tab = 'stats' | 'listings' | 'users' | 'disputes' | 'logs';
+type Tab = 'stats' | 'reports' | 'listings' | 'users' | 'disputes' | 'logs';
 
 const inp = 'w-full rounded-xl bg-slate-800 px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-500';
 const btn = 'flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium transition hover:bg-indigo-500 active:scale-95 disabled:opacity-60';
@@ -123,6 +123,7 @@ function Login({ username, onDone }: { username: string; onDone: () => void }) {
 
 const TABS: { id: Tab; label: string; Icon: any }[] = [
   { id: 'stats', label: 'Vue d’ensemble', Icon: LayoutDashboard },
+  { id: 'reports', label: 'Signalements', Icon: Flag },
   { id: 'listings', label: 'Annonces', Icon: Package },
   { id: 'users', label: 'Membres', Icon: Users },
   { id: 'disputes', label: 'Litiges', Icon: AlertTriangle },
@@ -204,11 +205,33 @@ function Dashboard({ onExit }: { onExit: () => void }) {
         <section className='anim-fade space-y-3'>
           {tab === 'stats' && (
             <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
-              {[['Membres', data.users, '+' + data.users24 + ' en 24 h'], ['Annonces actives', data.listings, '+' + data.listings24 + ' en 24 h'], ['Commandes', data.orders, ''], ['Litiges ouverts', data.disputes, data.suspended + ' compte(s) suspendu(s)']].map(([l, v, s]) => (
+              {[['Membres', data.users, '+' + data.users24 + ' en 24 h'], ['Annonces actives', data.listings, '+' + data.listings24 + ' en 24 h'], ['Commandes', data.orders, ''], ['Litiges ouverts', data.disputes, data.suspended + ' compte(s) suspendu(s)'], ['Signalements', data.reports, 'à vérifier']].map(([l, v, s]) => (
                 <div key={l as string} className={card}><p className='text-xs text-slate-400'>{l}</p><p className='mt-1 text-3xl font-bold tabular-nums'>{v}</p>{s && <p className='mt-1 text-xs text-slate-500'>{s}</p>}</div>
               ))}
             </div>
           )}
+          {tab === 'reports' && (data.items.length === 0 ? <p className='text-sm text-slate-500'>Aucun signalement en attente.</p> : data.items.map((l: any) => (
+            <div key={l.id} className={card + ' space-y-3'}>
+              <div className='flex gap-3'>
+                {l.thumb ? <img src={l.thumb} alt='' className='h-16 w-16 shrink-0 rounded-xl object-cover' /> : <div className='h-16 w-16 shrink-0 rounded-xl bg-slate-800' />}
+                <div className='min-w-0 flex-1'>
+                  <a href={'/listing/' + l.id} target='_blank' rel='noreferrer' className='font-semibold hover:underline'>{l.title}</a>
+                  {l.hidden && <span className='ml-2 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs text-rose-300'>Masquée</span>}
+                  {l.status === 'DELETED' && <span className='ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300'>Supprimée</span>}
+                  <p className='line-clamp-2 text-xs text-slate-400'>{l.description}</p>
+                  <p className='mt-1 text-xs text-slate-500'>{fmt(l.priceCents)} · par {l.seller.username}</p>
+                </div>
+              </div>
+              <div className='space-y-1 rounded-xl bg-slate-800/60 p-3 text-xs'>
+                <p className='font-semibold text-rose-300'>{l.reports.length} signalement(s)</p>
+                {l.reports.map((r: any) => <p key={r.id} className='text-slate-300'>• {({ SCAM: 'Arnaque', FORBIDDEN: 'Objet interdit', FAKE: 'Contrefaçon', OFFSITE: 'Hors Zelko', OFFENSIVE: 'Choquant', OTHER: 'Autre' } as any)[r.reason] ?? r.reason}{r.detail ? ' : ' + r.detail : ''} <span className='text-slate-500'>({new Date(r.createdAt).toLocaleDateString('fr-FR')})</span></p>)}
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                {l.status === 'ACTIVE' && <button disabled={!!busy} onClick={() => act('deleteListing', l.id, 'Supprimer l’annonce « ' + l.title + ' » ? Le vendeur sera prévenu.')} className={danger}><Trash2 size={14} />Supprimer l’annonce</button>}
+                <button disabled={!!busy} onClick={() => act('dismissReports', l.id, 'Classer les signalements et remettre « ' + l.title + ' » en ligne ?')} className={good}><CheckCircle2 size={14} />Annonce conforme</button>
+              </div>
+            </div>
+          )))}
           {tab === 'listings' && (data.items.length === 0 ? <p className='text-sm text-slate-500'>Aucune annonce.</p> : data.items.map((l: any) => (
             <div key={l.id} className={card + ' flex gap-3 p-3'}>
               {l.thumb ? <img src={l.thumb} alt='' className='h-16 w-16 shrink-0 rounded-xl object-cover' /> : <div className='h-16 w-16 shrink-0 rounded-xl bg-slate-800' />}

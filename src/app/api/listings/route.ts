@@ -1,18 +1,17 @@
 import { db } from '@/lib/db';
 import { getUserId, json } from '@/lib/auth';
 import { CATEGORIES, isCur, isImg, toEurCents } from '@/lib/money';
+import { checkListing } from '@/lib/rules';
 
 export const dynamic = 'force-dynamic';
 
-const RX = /\b(hacks?|cheats?|aimbot|wallhack|kamas?|gold|triche[rs]?|boosting)\b/i;
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 const CAT_IDS = CATEGORIES.map(c => c.id);
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const q = (sp.get('q') ?? '').trim().slice(0, 80);
   const cat = sp.get('cat') ?? '';
-  let where: any = { status: 'ACTIVE', priceCents: { gt: 0 }, seller: { accountStatus: 'ACTIVE' } };
+  let where: any = { status: 'ACTIVE', hidden: false, priceCents: { gt: 0 }, seller: { accountStatus: 'ACTIVE' } };
   if (sp.get('mine')) {
     const uid = await getUserId();
     if (!uid) return json({ error: 'Non authentifié' }, 401);
@@ -22,11 +21,11 @@ export async function GET(req: Request) {
   if (q) where.OR = [{ title: { contains: q, mode: 'insensitive' } }, { description: { contains: q, mode: 'insensitive' } }];
   const rows = await db.listing.findMany({
     where, orderBy: { createdAt: 'desc' }, take: 100,
-    select: { id: true, title: true, description: true, priceCents: true, category: true, thumb: true, sellerId: true, seller: { select: { username: true, badgePro: true, featuredUntil: true } } },
+    select: { id: true, title: true, description: true, priceCents: true, category: true, thumb: true, hidden: true, sellerId: true, seller: { select: { username: true, badgePro: true, featuredUntil: true } } },
   });
   const now = Date.now();
   const listings = rows.map(l => ({
-    id: l.id, title: l.title, description: l.description, price: l.priceCents, category: l.category, thumb: l.thumb, sellerId: l.sellerId,
+    id: l.id, title: l.title, description: l.description, price: l.priceCents, category: l.category, thumb: l.thumb, hidden: l.hidden, sellerId: l.sellerId,
     sellerName: l.seller.username, badge: l.seller.badgePro,
     featured: !!l.seller.featuredUntil && l.seller.featuredUntil.getTime() > now,
   }));
@@ -47,7 +46,8 @@ export async function POST(req: Request) {
   const imgs = Array.isArray(images) ? images : [];
   if (imgs.length > 6 || !imgs.every(i => isImg(i, 400000))) return json({ error: 'Images invalides (6 max., 400 Ko chacune)' }, 400);
   if (imgs.length && !isImg(thumb, 80000)) return json({ error: 'Miniature invalide' }, 400);
-  if (RX.test(norm(title + ' ' + description))) return json({ error: 'Contenu interdit (items in-game, hacks, triche)' }, 422);
+  const bad = checkListing(title + ' \n ' + description);
+  if (bad) return json({ error: bad }, 422);
   const u = await db.user.findUnique({ where: { id: uid }, select: { accountStatus: true } });
   if (!u || u.accountStatus !== 'ACTIVE') return json({ error: 'Compte non actif' }, 403);
   const l = await db.listing.create({ data: { title: title.trim(), description: description.trim(), priceCents: cents, category, images: imgs, thumb: imgs.length ? thumb : '', sellerId: uid } });

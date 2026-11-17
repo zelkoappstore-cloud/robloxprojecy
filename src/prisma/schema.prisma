@@ -75,6 +75,8 @@ model Listing {
   category         String        @default("autre")
   images           String[]      @default([])
   thumb            String        @default("")
+  hidden           Boolean       @default(false)
+  reports          Report[]
   sellerId         String
   seller           User          @relation(fields: [sellerId], references: [id])
   status           ListingStatus @default(ACTIVE)
@@ -101,6 +103,7 @@ model Order {
   createdAt    DateTime    @default(now())
   deliveredAt  DateTime?
   closedAt     DateTime?
+  review       Review?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -182,4 +185,31 @@ model AdminLog {
   at      DateTime @default(now())
 
   @@index([at])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  reporterId String
+  reason     String
+  detail     String   @default("")
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([listingId, reporterId])
+  @@index([resolved])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id])
+  sellerId  String
+  buyerId   String
+  rating    Int
+  comment   String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([sellerId])
 }
